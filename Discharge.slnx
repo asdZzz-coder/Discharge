@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Discharge/Discharge.csproj" />
+  <Project Path="Discharge.Tests/Discharge.Tests.csproj" />
+</Solution>
