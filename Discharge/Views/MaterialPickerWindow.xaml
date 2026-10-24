@@ -1,64 +1,121 @@
 <Window x:Class="Discharge.Views.MaterialPickerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="從資料庫選料" Height="640" Width="1000" MinHeight="400" MinWidth="700"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        FontFamily="Microsoft JhengHei UI" FontSize="14">
-    <DockPanel Margin="12">
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <TextBlock Text="搜尋" Style="{StaticResource FieldLabel}" />
-            <CheckBox DockPanel.Dock="Right" x:Name="OnlySelectedBox" Content="只看已勾選" VerticalAlignment="Center" Margin="12,0,0,0"
-                      Checked="Filter_Changed" Unchecked="Filter_Changed" />
-            <Button DockPanel.Dock="Right" Content="全部取消勾選" Click="ClearAll_Click" Margin="8,0,0,0" />
-            <Button DockPanel.Dock="Right" Content="勾選篩選出來的全部" Click="SelectAll_Click" Margin="12,0,0,0" />
-            <TextBox x:Name="SearchBox" TextChanged="Filter_Changed"
-                     ToolTip="搜尋料號、名稱、規格、備註；空格分開可以打好幾個關鍵字" />
-        </DockPanel>
+        Title="從資料庫選料" Height="680" Width="1040" MinHeight="420" MinWidth="760"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Style="{StaticResource AppWindow}">
+    <DockPanel Margin="24,20,24,18">
+        <!-- 標題 -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
+            <TextBlock Text="從資料庫選料" Style="{StaticResource PageTitle}" />
+            <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
+                       Text="勾選要出的料（可以多選），數量可以直接改。換搜尋條件時已經勾的會留著；選取好幾列後按空白鍵可以一次勾選或取消。" />
+        </StackPanel>
 
-        <TextBlock DockPanel.Dock="Top" Style="{StaticResource HintText}" Margin="0,0,0,8"
-                   Text="勾選要出的料（可以多選），數量可以直接改；換搜尋條件時已經勾的會留著。選取好幾列後按空白鍵可以一次勾選或取消。" />
-
-        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="OkButton" Content="加入表單" Click="Ok_Click" FontWeight="Bold" Margin="0,0,8,0" />
-                <Button Content="取消" IsCancel="True" />
+        <!-- 底部：已勾選數量、加入 / 取消 -->
+        <Grid DockPanel.Dock="Bottom" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Style="{StaticResource Chip}" Background="{StaticResource AccentSoftBrush}" BorderBrush="Transparent" Padding="10,3">
+                    <TextBlock x:Name="SelectedCountText" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentTextBrush}" />
+                </Border>
+                <TextBlock x:Name="SummaryText" Style="{StaticResource HintText}" Margin="10,0,0,0" />
             </StackPanel>
-            <TextBlock x:Name="SummaryText" VerticalAlignment="Center" />
-        </DockPanel>
+            <Button Grid.Column="1" Content="取消" IsCancel="True" Margin="0,0,8,0" Padding="18,9" />
+            <Button Grid.Column="2" x:Name="OkButton" Style="{StaticResource PrimaryButton}" Click="Ok_Click" Padding="20,9">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                    <TextBlock Text="加入表單" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
-        <DataGrid x:Name="RowsGrid" SelectionMode="Extended" PreviewKeyDown="RowsGrid_PreviewKeyDown">
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding Selected}" Value="True">
-                            <Setter Property="Background" Value="#E3F2E9" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.RowStyle>
-            <DataGrid.Columns>
-                <DataGridTemplateColumn Header="選" Width="44">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <CheckBox IsChecked="{Binding Selected, UpdateSourceTrigger=PropertyChanged}"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="料號" Binding="{Binding Material.PartNo}" IsReadOnly="True" Width="140" />
-                <DataGridTextColumn Header="名稱" Binding="{Binding Material.Name}" IsReadOnly="True" Width="*" />
-                <DataGridTextColumn Header="規格" Binding="{Binding Material.Spec}" IsReadOnly="True" Width="1.3*" />
-                <DataGridTextColumn Header="備註" Binding="{Binding Material.Note}" IsReadOnly="True" Width="*" />
-                <DataGridTextColumn Header="數量" Binding="{Binding Quantity}" Width="70" />
-                <DataGridTextColumn Header="" Binding="{Binding Status}" IsReadOnly="True" Width="130">
-                    <DataGridTextColumn.ElementStyle>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Foreground" Value="#B26A00" />
-                            <Setter Property="VerticalAlignment" Value="Center" />
-                        </Style>
-                    </DataGridTextColumn.ElementStyle>
-                </DataGridTextColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+        <Border Style="{StaticResource Card}" Padding="16">
+            <DockPanel>
+                <!-- 搜尋與勾選工具 -->
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" TextChanged="Filter_Changed"
+                             Tag="搜尋料號、名稱、規格、備註（空格分開可以打好幾個關鍵字）" />
+                    <Button Grid.Column="1" Style="{StaticResource GhostButton}" Click="SelectAll_Click" Margin="10,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE762;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="勾選篩選出來的全部" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" Click="ClearAll_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE711;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="全部取消" />
+                        </StackPanel>
+                    </Button>
+                    <CheckBox Grid.Column="3" x:Name="OnlySelectedBox" Content="只看已勾選" FontSize="13" Margin="10,0,4,0"
+                              Checked="Filter_Changed" Unchecked="Filter_Changed" />
+                </Grid>
+
+                <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="1">
+                    <Grid>
+                        <DataGrid x:Name="RowsGrid" SelectionMode="Extended" PreviewKeyDown="RowsGrid_PreviewKeyDown">
+                            <DataGrid.RowStyle>
+                                <!-- 選取的列用灰色、勾選的列用綠色，兩種才分得出來 -->
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource PressedBrush}" />
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding Selected}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Width="48" CanUserResize="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding Selected, UpdateSourceTrigger=PropertyChanged}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="料號" Binding="{Binding Material.PartNo}" IsReadOnly="True" Width="140"
+                                                    ElementStyle="{StaticResource StrongCell}" />
+                                <DataGridTextColumn Header="名稱" Binding="{Binding Material.Name}" IsReadOnly="True" Width="*" />
+                                <DataGridTextColumn Header="規格" Binding="{Binding Material.Spec}" IsReadOnly="True" Width="1.3*"
+                                                    ElementStyle="{StaticResource MutedCell}" />
+                                <DataGridTextColumn Header="備註" Binding="{Binding Material.Note}" IsReadOnly="True" Width="*"
+                                                    ElementStyle="{StaticResource MutedCell}" />
+                                <DataGridTextColumn Header="數量" Binding="{Binding Quantity}" Width="76" HeaderStyle="{StaticResource NumberHeader}"
+                                                    ElementStyle="{StaticResource NumberCell}" />
+                                <DataGridTemplateColumn Header="" IsReadOnly="True" Width="130">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="Tag" Style="{StaticResource Chip}" HorizontalAlignment="Left"
+                                                    Background="{StaticResource WarningSoftBrush}" BorderBrush="#FDE68A">
+                                                <TextBlock Text="{Binding Status}" Style="{StaticResource ChipText}" Foreground="{StaticResource WarningBrush}" />
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="">
+                                                    <Setter TargetName="Tag" Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock x:Name="EmptyText" Style="{StaticResource EmptyText}" Text="找不到符合的物料" Visibility="Collapsed" />
+                    </Grid>
+                </Border>
+            </DockPanel>
+        </Border>
     </DockPanel>
 </Window>

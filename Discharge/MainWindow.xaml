@@ -1,152 +1,364 @@
 <Window x:Class="Discharge.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Discharge" Height="720" Width="1200" MinHeight="480" MinWidth="900"
-        WindowStartupLocation="CenterScreen"
-        FontFamily="Microsoft JhengHei UI" FontSize="14"
+        Title="Discharge" Height="760" Width="1240" MinHeight="520" MinWidth="960"
+        WindowStartupLocation="CenterScreen" Style="{StaticResource AppWindow}"
         Loaded="Window_Loaded" Closing="Window_Closing" PreviewKeyDown="Window_PreviewKeyDown">
     <DockPanel>
-        <!-- 狀態列：訊息、版本與更新 -->
-        <Border DockPanel.Dock="Bottom" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0" Padding="10,6">
-            <DockPanel>
-                <Button DockPanel.Dock="Right" Content="檢查更新" Padding="12,3" Click="CheckUpdate_Click" />
-                <TextBlock DockPanel.Dock="Right" x:Name="StatusText" VerticalAlignment="Center" Foreground="#666666" Margin="12,0" />
-                <TextBlock x:Name="MessageText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-            </DockPanel>
-        </Border>
+        <!-- ===== 標題列：程式名稱、分頁切換 ===== -->
+        <Grid DockPanel.Dock="Top" Margin="24,18,24,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Border Width="40" Height="40" CornerRadius="12" Background="{StaticResource AccentGradient}">
+                    <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="19" Foreground="White"
+                               HorizontalAlignment="Center" />
+                </Border>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Discharge" FontFamily="{StaticResource DisplayFont}" FontSize="19" FontWeight="SemiBold" />
+                    <TextBlock Text="物料資料庫與機台出料表單" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Style="{StaticResource SegmentBar}" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource SegmentTab}" GroupName="Page" Tag="0" IsChecked="True" Checked="PageTab_Checked">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8A5;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="機台表單" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="MaterialsTabButton" Style="{StaticResource SegmentTab}" GroupName="Page" Tag="1" Checked="PageTab_Checked">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8F1;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="物料資料庫" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </Border>
+        </Grid>
 
-        <TabControl x:Name="MainTabs" Margin="8,8,8,4">
+        <!-- ===== 狀態列：訊息、版本與更新 ===== -->
+        <Grid DockPanel.Dock="Bottom" Margin="24,0,18,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="MessageText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       FontSize="12.5" Foreground="{StaticResource MutedBrush}" />
+            <TextBlock Grid.Column="1" x:Name="StatusText" VerticalAlignment="Center" FontSize="12.5"
+                       Foreground="{StaticResource SubtleBrush}" Margin="12,0,4,0" />
+            <Button Grid.Column="2" Style="{StaticResource GhostButton}" Click="CheckUpdate_Click" Padding="10,6">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE895;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                    <TextBlock Text="檢查更新" FontSize="12.5" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- 兩個頁面，由上方的切換按鈕決定顯示哪一個 -->
+        <Grid Margin="24,0,24,10">
+
             <!-- ========== 機台表單 ========== -->
-            <TabItem Header="  機台表單  ">
-                <Grid Margin="8">
+            <ContentControl x:Name="MachinesPage" Focusable="False" IsTabStop="False">
+                <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="360" />
+                        <ColumnDefinition Width="330" />
                         <ColumnDefinition Width="16" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <!-- 左：機台清單 -->
-                    <DockPanel>
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                            <Button DockPanel.Dock="Right" Content="＋ 新增機台" Click="NewMachine_Click" />
-                            <TextBlock Text="機台" Style="{StaticResource SectionTitle}" />
-                        </DockPanel>
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                            <TextBlock Text="搜尋" Style="{StaticResource FieldLabel}" />
-                            <TextBox x:Name="MachineSearchBox" TextChanged="MachineSearch_TextChanged"
+                    <Border Style="{StaticResource Card}" Padding="14,16">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="4,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="機台" Style="{StaticResource SectionTitle}" />
+                                <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0" HorizontalAlignment="Left">
+                                    <TextBlock x:Name="MachineCountText" Style="{StaticResource ChipText}" />
+                                </Border>
+                                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Click="NewMachine_Click" Padding="12,7">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                                        <TextBlock Text="新增機台" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <TextBox DockPanel.Dock="Top" x:Name="MachineSearchBox" Style="{StaticResource SearchBox}"
+                                     Tag="搜尋工令、機台、料號…" Margin="0,0,0,10" TextChanged="MachineSearch_TextChanged"
                                      ToolTip="搜尋工令、機台名稱，或表單上的料號、名稱、規格；空格分開可以打好幾個關鍵字" />
+                            <Grid>
+                                <ListBox x:Name="MachineList" Style="{StaticResource SideList}"
+                                         SelectionChanged="MachineList_SelectionChanged">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding WorkOrder}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Name}" FontSize="12.5" Margin="0,2,0,0"
+                                                               Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                                    <TextBlock Text="{Binding ItemCount, StringFormat={}{0} 項}" Style="{StaticResource ChipText}" />
+                                                </Border>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="MachineEmptyText" Style="{StaticResource EmptyText}" />
+                            </Grid>
                         </DockPanel>
-                        <TextBlock DockPanel.Dock="Bottom" x:Name="MachineCountText" Style="{StaticResource HintText}" Margin="0,6,0,0" />
-                        <DataGrid x:Name="MachineGrid" IsReadOnly="True" SelectionMode="Single"
-                                  SelectionChanged="MachineGrid_SelectionChanged">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="工令" Binding="{Binding WorkOrder}" Width="*" />
-                                <DataGridTextColumn Header="機台名稱" Binding="{Binding Name}" Width="1.4*" />
-                                <DataGridTextColumn Header="料件" Binding="{Binding ItemCount}" Width="50" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
+                    </Border>
 
                     <!-- 右：機台表單 -->
-                    <DockPanel Grid.Column="2">
-                        <TextBlock DockPanel.Dock="Top" x:Name="FormTitle" Style="{StaticResource SectionTitle}" Margin="0,4,0,12" />
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="22,20">
+                        <DockPanel>
+                            <!-- 標題 -->
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="FormTitle" Style="{StaticResource PageTitle}" />
+                                        <Border x:Name="UnsavedChip" Style="{StaticResource Chip}" Margin="10,2,0,0"
+                                                Background="{StaticResource WarningSoftBrush}" BorderBrush="#FDE68A" Visibility="Collapsed">
+                                            <TextBlock Text="尚未儲存" Style="{StaticResource ChipText}" Foreground="{StaticResource WarningBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock x:Name="FormSubtitle" Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <Button Grid.Column="1" x:Name="DeleteMachineButton" Style="{StaticResource DangerButton}"
+                                        Click="DeleteMachine_Click" VerticalAlignment="Top">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74D;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="刪除機台" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
 
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="20" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="2*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="工令 *" Style="{StaticResource FieldLabel}" />
-                            <TextBox Grid.Column="1" x:Name="WorkOrderBox" />
-                            <TextBlock Grid.Column="3" Text="機台名稱 *" Style="{StaticResource FieldLabel}" />
-                            <TextBox Grid.Column="4" x:Name="MachineNameBox" />
-                        </Grid>
+                            <!-- 工令、機台名稱 -->
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,20">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="2*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="工令 *" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="WorkOrderBox" TextChanged="MachineField_TextChanged" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="機台名稱 *" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="MachineNameBox" TextChanged="MachineField_TextChanged" />
+                                </StackPanel>
+                            </Grid>
 
-                        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-                            <Button DockPanel.Dock="Left" x:Name="DeleteMachineButton" Content="刪除機台" Click="DeleteMachine_Click" />
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="還原變更" Click="RevertMachine_Click" Margin="0,0,8,0" />
-                                <Button Content="儲存（Ctrl+S）" Click="SaveMachine_Click" FontWeight="Bold" />
-                            </StackPanel>
+                            <!-- 底部：還原、儲存 -->
+                            <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource HintText}" Text="數量、備註可以在表格上直接修改。按 Ctrl+S 儲存。" />
+                                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Click="RevertMachine_Click" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE7A7;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="還原變更" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="2" x:Name="SaveMachineButton" Style="{StaticResource PrimaryButton}" Click="SaveMachine_Click" Padding="20,9">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74E;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="儲存" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <!-- 出料清單標題列 -->
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="出料清單" Style="{StaticResource SectionTitle}" />
+                                <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0" HorizontalAlignment="Left">
+                                    <TextBlock x:Name="ItemCountText" Style="{StaticResource ChipText}" />
+                                </Border>
+                                <Button Grid.Column="2" Click="RemoveItems_Click" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE738;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="移除選取的料" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" x:Name="PickButton" Style="{StaticResource PrimaryButton}" Click="PickMaterials_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                                        <TextBlock Text="從資料庫選料" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="1">
+                                <Grid>
+                                    <DataGrid x:Name="ItemGrid" SelectionMode="Extended" CellEditEnding="ItemGrid_CellEditEnding">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="料號" Binding="{Binding PartNo}" IsReadOnly="True" Width="140"
+                                                                ElementStyle="{StaticResource StrongCell}" />
+                                            <DataGridTextColumn Header="名稱" Binding="{Binding Name}" IsReadOnly="True" Width="*" />
+                                            <DataGridTextColumn Header="規格" Binding="{Binding Spec}" IsReadOnly="True" Width="1.3*"
+                                                                ElementStyle="{StaticResource MutedCell}" />
+                                            <DataGridTextColumn Header="數量" Binding="{Binding Quantity}" Width="80" HeaderStyle="{StaticResource NumberHeader}"
+                                                                ElementStyle="{StaticResource NumberCell}" />
+                                            <DataGridTextColumn Header="備註" Binding="{Binding Note}" Width="*"
+                                                                ElementStyle="{StaticResource MutedCell}" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <StackPanel x:Name="ItemEmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
+                                        <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="34"
+                                                   Foreground="{StaticResource LineBrush}" HorizontalAlignment="Center" />
+                                        <TextBlock Style="{StaticResource EmptyText}" Margin="0,10,0,0"
+                                                   Text="還沒有料，按右上的「從資料庫選料」加入" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </DockPanel>
-
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                            <Button Content="從資料庫選料…" Click="PickMaterials_Click" FontWeight="Bold" />
-                            <Button Content="移除選取的料" Click="RemoveItems_Click" Margin="8,0,0,0" />
-                            <TextBlock x:Name="ItemCountText" Style="{StaticResource HintText}" Margin="12,0,0,0" />
-                        </DockPanel>
-
-                        <DataGrid x:Name="ItemGrid" SelectionMode="Extended">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="料號" Binding="{Binding PartNo}" IsReadOnly="True" Width="140" />
-                                <DataGridTextColumn Header="名稱" Binding="{Binding Name}" IsReadOnly="True" Width="*" />
-                                <DataGridTextColumn Header="規格" Binding="{Binding Spec}" IsReadOnly="True" Width="1.3*" />
-                                <DataGridTextColumn Header="數量" Binding="{Binding Quantity}" Width="70" />
-                                <DataGridTextColumn Header="備註" Binding="{Binding Note}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
+                    </Border>
                 </Grid>
-            </TabItem>
+            </ContentControl>
 
             <!-- ========== 物料資料庫 ========== -->
-            <TabItem Header="  物料資料庫  ">
-                <Grid Margin="8">
+            <ContentControl x:Name="MaterialsPage" Focusable="False" IsTabStop="False" Visibility="Collapsed">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="16" />
-                        <ColumnDefinition Width="320" />
+                        <ColumnDefinition Width="330" />
                     </Grid.ColumnDefinitions>
 
                     <!-- 左：物料清單 -->
-                    <DockPanel>
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                            <TextBlock Text="搜尋" Style="{StaticResource FieldLabel}" />
-                            <Button DockPanel.Dock="Right" Content="刪除選取的物料" Click="DeleteMaterials_Click" Margin="8,0,0,0" />
-                            <Button DockPanel.Dock="Right" Content="從剪貼簿貼上" Click="PasteMaterials_Click" Margin="8,0,0,0"
-                                    ToolTip="在 Excel 選好範圍按 Ctrl+C，再按這個按鈕一次加入很多項" />
-                            <TextBlock DockPanel.Dock="Right" x:Name="MaterialCountText" Style="{StaticResource HintText}" Margin="12,0,4,0" />
-                            <TextBox x:Name="MaterialSearchBox" TextChanged="MaterialSearch_TextChanged"
-                                     ToolTip="搜尋料號、名稱、規格、備註；空格分開可以打好幾個關鍵字" />
+                    <Border Style="{StaticResource Card}" Padding="20,18">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="物料資料庫" Style="{StaticResource SectionTitle}" />
+                                <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0" HorizontalAlignment="Left">
+                                    <TextBlock x:Name="MaterialCountText" Style="{StaticResource ChipText}" />
+                                </Border>
+                                <Button Grid.Column="2" Click="PasteMaterials_Click" Margin="0,0,8,0"
+                                        ToolTip="在 Excel 選好範圍按 Ctrl+C，再按這個按鈕一次加入很多項">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE77F;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="從剪貼簿貼上" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" Style="{StaticResource DangerButton}" Click="DeleteMaterials_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74D;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="刪除選取的物料" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <TextBox DockPanel.Dock="Top" x:Name="MaterialSearchBox" Style="{StaticResource SearchBox}"
+                                     Tag="搜尋料號、名稱、規格、備註（空格分開可以打好幾個關鍵字）" Margin="0,0,0,12"
+                                     TextChanged="MaterialSearch_TextChanged" />
+                            <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="1">
+                                <Grid>
+                                    <DataGrid x:Name="MaterialGrid" IsReadOnly="True" SelectionMode="Extended"
+                                              SelectionChanged="MaterialGrid_SelectionChanged">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="料號" Binding="{Binding PartNo}" Width="150"
+                                                                ElementStyle="{StaticResource StrongCell}" />
+                                            <DataGridTextColumn Header="名稱" Binding="{Binding Name}" Width="*" />
+                                            <DataGridTextColumn Header="規格" Binding="{Binding Spec}" Width="1.3*"
+                                                                ElementStyle="{StaticResource MutedCell}" />
+                                            <DataGridTextColumn Header="備註" Binding="{Binding Note}" Width="*"
+                                                                ElementStyle="{StaticResource MutedCell}" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <TextBlock x:Name="MaterialEmptyText" Style="{StaticResource EmptyText}" />
+                                </Grid>
+                            </Border>
                         </DockPanel>
-                        <DataGrid x:Name="MaterialGrid" IsReadOnly="True" SelectionMode="Extended"
-                                  SelectionChanged="MaterialGrid_SelectionChanged">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="料號" Binding="{Binding PartNo}" Width="150" />
-                                <DataGridTextColumn Header="名稱" Binding="{Binding Name}" Width="*" />
-                                <DataGridTextColumn Header="規格" Binding="{Binding Spec}" Width="1.3*" />
-                                <DataGridTextColumn Header="備註" Binding="{Binding Note}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
+                    </Border>
 
                     <!-- 右：新增 / 修改物料 -->
-                    <StackPanel Grid.Column="2">
-                        <TextBlock x:Name="MaterialFormTitle" Style="{StaticResource SectionTitle}" Margin="0,4,0,12" />
-                        <TextBlock Text="料號 *" Margin="0,0,0,4" />
-                        <TextBox x:Name="PartNoBox" Margin="0,0,0,10" />
-                        <TextBlock Text="名稱 *" Margin="0,0,0,4" />
-                        <TextBox x:Name="MaterialNameBox" Margin="0,0,0,10" />
-                        <TextBlock Text="規格" Margin="0,0,0,4" />
-                        <TextBox x:Name="SpecBox" Margin="0,0,0,10" />
-                        <TextBlock Text="備註" Margin="0,0,0,4" />
-                        <TextBox x:Name="MaterialNoteBox" Height="80" AcceptsReturn="True" TextWrapping="Wrap"
-                                 VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" Margin="0,0,0,12" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="新增" Click="AddMaterial_Click" FontWeight="Bold" />
-                            <Button x:Name="UpdateMaterialButton" Content="儲存修改" Click="UpdateMaterial_Click" Margin="8,0,0,0" />
-                            <Button Content="清空" Click="ClearMaterialForm_Click" Margin="8,0,0,0" />
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="20,18">
+                        <!-- 視窗矮的時候可以捲動，下面的說明才不會被切掉 -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,-10,0">
+                        <StackPanel Margin="0,0,10,0">
+                            <TextBlock x:Name="MaterialFormTitle" Style="{StaticResource SectionTitle}" Margin="0,0,0,16" />
+                            <TextBlock Text="料號 *" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="PartNoBox" Margin="0,0,0,12" />
+                            <TextBlock Text="名稱 *" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="MaterialNameBox" Margin="0,0,0,12" />
+                            <TextBlock Text="規格" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="SpecBox" Margin="0,0,0,12" />
+                            <TextBlock Text="備註" Style="{StaticResource FieldLabel}" />
+                            <TextBox x:Name="MaterialNoteBox" Height="84" AcceptsReturn="True" TextWrapping="Wrap"
+                                     VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" Margin="0,0,0,16" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="8" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button Style="{StaticResource PrimaryButton}" Click="AddMaterial_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                                        <TextBlock Text="新增" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="2" x:Name="UpdateMaterialButton" Click="UpdateMaterial_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74E;" Style="{StaticResource ButtonIcon}" />
+                                        <TextBlock Text="儲存修改" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" Style="{StaticResource GhostButton}" Content="清空"
+                                        Click="ClearMaterialForm_Click" Margin="4,0,0,0" />
+                            </Grid>
+                            <Border Style="{StaticResource InfoBox}" Margin="0,20,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" Foreground="{StaticResource AccentTextBrush}"
+                                               VerticalAlignment="Top" Margin="0,2,10,0" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Style="{StaticResource HintText}" Foreground="{StaticResource AccentTextBrush}"
+                                                   Text="點清單上的物料可以修改；按「新增」會用表單內容新增一項，可以拿現有的改一改再新增。" />
+                                        <TextBlock Style="{StaticResource HintText}" Foreground="{StaticResource AccentTextBrush}" Margin="0,6,0,0"
+                                                   Text="修改或刪除物料不會改到已經建好的機台表單。" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </StackPanel>
-                        <TextBlock Style="{StaticResource HintText}" Margin="0,16,0,0"
-                                   Text="點清單上的物料可以修改。按「新增」會用表單內容新增一項，可以拿現有的物料改一改再新增。" />
-                        <TextBlock Style="{StaticResource HintText}" Margin="0,8,0,0"
-                                   Text="修改或刪除物料不會改到已經建好的機台表單。" />
-                    </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </Grid>
-            </TabItem>
-        </TabControl>
+            </ContentControl>
+        </Grid>
     </DockPanel>
 </Window>

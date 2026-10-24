@@ -46,7 +46,10 @@ namespace Discharge.Views
         private void UpdateSummary()
         {
             var selected = _rows.Count(r => r.Selected);
-            SummaryText.Text = $"已勾選 {selected} 項　（顯示 {_view?.Count ?? _rows.Count} / 共 {_rows.Count} 項）";
+            var shown = _view?.Count ?? _rows.Count;
+            SelectedCountText.Text = $"已勾選 {selected} 項";
+            SummaryText.Text = $"顯示 {shown} / 共 {_rows.Count} 項";
+            EmptyText.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
             OkButton.IsEnabled = selected > 0;
         }
 

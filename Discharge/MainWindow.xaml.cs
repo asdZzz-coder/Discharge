@@ -43,7 +43,7 @@ namespace Discharge
             };
             _machineView.SortDescriptions.Add(new SortDescription(nameof(Machine.WorkOrder), ListSortDirection.Ascending));
             _machineView.SortDescriptions.Add(new SortDescription(nameof(Machine.Name), ListSortDirection.Ascending));
-            MachineGrid.ItemsSource = _machineView;
+            MachineList.ItemsSource = _machineView;
 
             _materialView = new ListCollectionView(_data.Materials)
             {
@@ -71,20 +71,38 @@ namespace Discharge
             }
         }
 
+        /// <summary>更新數量標籤、清單空白時的提示和「尚未儲存」標籤。</summary>
         private void UpdateCounts()
         {
-            MachineCountText.Text = string.IsNullOrWhiteSpace(MachineSearchBox.Text)
-                ? $"共 {_data.Machines.Count} 台"
-                : $"符合 {_machineView.Count} 台 / 共 {_data.Machines.Count} 台";
-            MaterialCountText.Text = string.IsNullOrWhiteSpace(MaterialSearchBox.Text)
-                ? $"共 {_data.Materials.Count} 項"
-                : $"符合 {_materialView.Count} / {_data.Materials.Count} 項";
-            ItemCountText.Text = $"共 {_draftItems.Count} 項料";
+            var machineSearch = !string.IsNullOrWhiteSpace(MachineSearchBox.Text);
+            MachineCountText.Text = machineSearch
+                ? $"{_machineView.Count} / {_data.Machines.Count} 台"
+                : $"{_data.Machines.Count} 台";
+            MachineEmptyText.Text = _data.Machines.Count == 0 ? "還沒有機台，\n按「新增機台」開始建立表單"
+                : _machineView.Count == 0 ? "找不到符合的機台" : "";
+
+            var materialSearch = !string.IsNullOrWhiteSpace(MaterialSearchBox.Text);
+            MaterialCountText.Text = materialSearch
+                ? $"{_materialView.Count} / {_data.Materials.Count} 項"
+                : $"{_data.Materials.Count} 項";
+            MaterialEmptyText.Text = _data.Materials.Count == 0 ? "資料庫還沒有物料，\n在右邊填好料號、名稱後按「新增」，或從 Excel 複製後按「從剪貼簿貼上」"
+                : _materialView.Count == 0 ? "找不到符合的物料" : "";
+
+            ItemCountText.Text = $"{_draftItems.Count} 項";
+            ItemEmptyPanel.Visibility = _draftItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDirtyMark();
+        }
+
+        private void PageTab_Checked(object sender, RoutedEventArgs e)
+        {
+            if (MachinesPage == null || sender is not RadioButton { Tag: string page }) return; // InitializeComponent 期間
+            MachinesPage.Visibility = page == "0" ? Visibility.Visible : Visibility.Collapsed;
+            MaterialsPage.Visibility = page == "1" ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control && MainTabs.SelectedIndex == 0)
+            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control && MachinesPage.IsVisible)
             {
                 SaveMachine();
                 e.Handled = true;
@@ -106,25 +124,51 @@ namespace Discharge
             WorkOrderBox.Text = _draft.WorkOrder;
             MachineNameBox.Text = _draft.Name;
             ItemGrid.ItemsSource = _draftItems;
-            FormTitle.Text = m == null ? "新增機台" : $"機台：{m.WorkOrder}　{m.Name}";
-            DeleteMachineButton.IsEnabled = m != null;
+            FormTitle.Text = m == null ? "新增機台" : $"{m.WorkOrder}　{m.Name}";
+            FormSubtitle.Text = m == null
+                ? "填好工令和機台名稱，再從資料庫選料，最後按「儲存」。"
+                : $"建立於 {m.CreatedAt:yyyy/MM/dd HH:mm}　·　最後儲存 {m.UpdatedAt:yyyy/MM/dd HH:mm}";
+            DeleteMachineButton.Visibility = m != null ? Visibility.Visible : Visibility.Collapsed;
             _savedSnapshot = Snapshot();
             UpdateCounts();
         }
 
-        /// <summary>把畫面上的內容寫進 _draft。</summary>
+        /// <summary>把畫面上的內容寫進 _draft（表格正在編輯的那一格要先 CommitItemEdits 才會算進去）。</summary>
         private Machine FormToMachine()
         {
-            ItemGrid.CommitEdit(DataGridEditingUnit.Row, true);
             _draft.WorkOrder = TextRules.Clean(WorkOrderBox.Text);
             _draft.Name = TextRules.Clean(MachineNameBox.Text);
             _draft.Items = _draftItems.ToList();
             return _draft;
         }
 
+        private void CommitItemEdits() => ItemGrid.CommitEdit(DataGridEditingUnit.Row, true);
+
         private string Snapshot() => DataStore.Serialize(FormToMachine());
 
-        private bool IsMachineDirty => Snapshot() != _savedSnapshot;
+        private bool IsMachineDirty
+        {
+            get
+            {
+                CommitItemEdits();
+                return Snapshot() != _savedSnapshot;
+            }
+        }
+
+        /// <summary>標題旁的「尚未儲存」。不結束表格的編輯，打字到一半不會被打斷。</summary>
+        private void UpdateDirtyMark() =>
+            UnsavedChip.Visibility = Snapshot() != _savedSnapshot ? Visibility.Visible : Visibility.Collapsed;
+
+        private void MachineField_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_savedSnapshot.Length > 0) UpdateDirtyMark(); // LoadMachine 完成前不用判斷
+        }
+
+        private void ItemGrid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+        {
+            // 這時新的值還沒寫回去，等編輯結束後再判斷
+            Dispatcher.InvokeAsync(UpdateDirtyMark, System.Windows.Threading.DispatcherPriority.Background);
+        }
 
         /// <summary>表單有沒存的變更時先詢問；回傳 false 表示使用者取消，留在原本的表單。</summary>
         private bool ConfirmLeaveMachine()
@@ -138,6 +182,7 @@ namespace Discharge
         private bool SaveMachine()
         {
             const string title = "儲存機台";
+            CommitItemEdits();
             var m = FormToMachine();
             var error = MachineRules.Validate(m);
             if (error != null)
@@ -168,16 +213,16 @@ namespace Discharge
         private void SelectMachineSilently(Machine? m)
         {
             _suppressSelection = true;
-            MachineGrid.SelectedItem = m;
-            if (m != null) MachineGrid.ScrollIntoView(m);
+            MachineList.SelectedItem = m;
+            if (m != null) MachineList.ScrollIntoView(m);
             _suppressSelection = false;
         }
 
-        private void MachineGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void MachineList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_suppressSelection) return;
             // 搜尋把目前的機台篩掉時選取會變成空的，這時繼續編輯原本的表單
-            if (MachineGrid.SelectedItem is not Machine target || target == _editing) return;
+            if (MachineList.SelectedItem is not Machine target || target == _editing) return;
 
             if (!ConfirmLeaveMachine())
             {
