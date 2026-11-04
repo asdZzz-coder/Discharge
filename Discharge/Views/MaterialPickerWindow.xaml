@@ -63,7 +63,7 @@
 
                 <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="1">
                     <Grid>
-                        <DataGrid x:Name="RowsGrid" SelectionMode="Extended" PreviewKeyDown="RowsGrid_PreviewKeyDown">
+                        <DataGrid x:Name="RowsGrid" SelectionMode="Extended" IsSynchronizedWithCurrentItem="False" PreviewKeyDown="RowsGrid_PreviewKeyDown">
                             <DataGrid.RowStyle>
                                 <!-- 選取的列用灰色、勾選的列用綠色，兩種才分得出來 -->
                                 <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">

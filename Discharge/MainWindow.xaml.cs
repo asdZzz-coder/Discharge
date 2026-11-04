@@ -9,6 +9,7 @@ using System.Windows.Input;
 using Discharge.Models;
 using Discharge.Services;
 using Discharge.Views;
+using Microsoft.Win32;
 
 namespace Discharge
 {
@@ -449,6 +450,107 @@ namespace Discharge
             if (skipped > 0) message += $"\n有 {skipped} 列沒有名稱，沒有加入。";
             MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
             MessageText.Text = $"從剪貼簿新增 {added} 項、更新 {updated} 項物料";
+        }
+
+        // ---------- Excel 匯出 / 匯入 ----------
+
+        private void Export_Click(object sender, RoutedEventArgs e)
+        {
+            const string title = "匯出 Excel";
+            if (!ConfirmLeaveMachine()) return; // 匯出的是存好的資料
+            var dlg = new SaveFileDialog
+            {
+                Filter = "Excel 檔案 (*.xlsx)|*.xlsx",
+                FileName = $"Discharge_{DateTime.Now:yyyyMMdd}.xlsx",
+            };
+            if (dlg.ShowDialog(this) != true) return;
+
+            try
+            {
+                ExcelService.Export(_data, dlg.FileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"匯出失敗（這個檔案可能正被 Excel 開著）：{ex.Message}", title, MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            MessageText.Text = $"已匯出 {_data.Materials.Count} 項物料、{_data.Machines.Count} 台機台到 {dlg.FileName}";
+            MessageBox.Show($"匯出完成：{_data.Materials.Count} 項物料、{_data.Machines.Count} 台機台。", title);
+        }
+
+        private void Import_Click(object sender, RoutedEventArgs e)
+        {
+            const string title = "匯入 Excel";
+            if (!ConfirmLeaveMachine()) return;
+            var dlg = new OpenFileDialog { Filter = "Excel 檔案 (*.xlsx)|*.xlsx" };
+            if (dlg.ShowDialog(this) != true) return;
+
+            ExcelImport file;
+            try
+            {
+                file = ExcelService.Read(dlg.FileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"這個檔案讀不出來：{ex.Message}", title, MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (file.Errors.Count > 0)
+            {
+                var errors = string.Join("\n", file.Errors.Take(10)) + (file.Errors.Count > 10 ? $"\n…還有 {file.Errors.Count - 10} 筆" : "");
+                MessageBox.Show($"檔案有問題，沒有匯入任何資料。改好再匯入一次：\n\n{errors}", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (file.IsEmpty)
+            {
+                MessageBox.Show($"這個檔案裡找不到可以匯入的資料。\n\n要有「{ExcelService.MaterialSheet}」「{ExcelService.MachineSheet}」「{ExcelService.ItemSheet}」工作表，" +
+                    "或第一張工作表的第一列有「料號」標題（可以先按「匯出」產生一份範本）。", title);
+                return;
+            }
+
+            var window = new ImportWindow(dlg.FileName, file, _data) { Owner = this };
+            if (window.ShowDialog() != true) return;
+
+            // 先套用在複本上，備份和存檔都成功才換掉畫面上的資料
+            var next = DataStore.Clone(_data);
+            var result = ExcelService.Apply(next, file, window.Mode);
+            string? backup;
+            try
+            {
+                backup = DataStore.BackupBeforeImport();
+                DataStore.Save(next);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show($"存檔失敗，沒有匯入任何資料：{ex.Message}", title, MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            ReplaceData(next);
+
+            var message = $"物料：新增 {result.MaterialsAdded} 項、更新 {result.MaterialsUpdated} 項\n機台：新增 {result.MachinesAdded} 台、更新 {result.MachinesUpdated} 台";
+            if (result.MaterialsSkipped > 0) message += $"\n有 {result.MaterialsSkipped} 項新物料沒有名稱，沒有加入。";
+            if (backup != null) message += $"\n\n匯入前的資料備份在：\n{backup}";
+            MessageText.Text = $"匯入完成：物料 {_data.Materials.Count} 項、機台 {_data.Machines.Count} 台";
+            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        /// <summary>換成新的資料，重新整理畫面；正在看的機台還在就留在那一台。</summary>
+        private void ReplaceData(AppData next)
+        {
+            var currentId = _editing?.Id;
+            _data.Materials.Clear();
+            _data.Materials.AddRange(next.Materials);
+            _data.Machines.Clear();
+            _data.Machines.AddRange(next.Machines);
+            _materialView.Refresh();
+            _machineView.Refresh();
+            ClearMaterialForm();
+
+            var current = _data.Machines.FirstOrDefault(m => m.Id == currentId);
+            SelectMachineSilently(current);
+            LoadMachine(current);
         }
 
         // ---------- 啟動時檢查更新（詢問使用者） ----------

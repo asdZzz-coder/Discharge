@@ -38,13 +38,24 @@ namespace Discharge.Services
                 .Where(line => line.Trim().Length > 0)
                 .Select(line => line.Split('\t').Select(c => TextRules.Clean(c.Trim().Trim('"'))).ToArray())
                 .ToList();
+            return ParseRows(rows);
+        }
+
+        /// <summary>這一列是標題列（有「料號 / 品號」）。</summary>
+        public static bool IsHeaderRow(string[] row) => FindColumn(row, HeaderNames[0]) >= 0;
+
+        private static int FindColumn(string[] header, string[] names) =>
+            Array.FindIndex(header, h => names.Any(n => h.Contains(n, StringComparison.OrdinalIgnoreCase)));
+
+        /// <summary>已經切好欄位的表格轉成物料，規則同 ParseTable。</summary>
+        public static List<Material> ParseRows(List<string[]> source)
+        {
+            var rows = source.ToList();
             if (rows.Count == 0) return new();
 
             int[] cols = { 0, 1, 2, 3 };
             var header = rows[0];
-            var found = HeaderNames
-                .Select(names => Array.FindIndex(header, h => names.Any(n => h.Contains(n, StringComparison.OrdinalIgnoreCase))))
-                .ToArray();
+            var found = HeaderNames.Select(names => FindColumn(header, names)).ToArray();
             if (found[0] >= 0)
             {
                 cols = found;

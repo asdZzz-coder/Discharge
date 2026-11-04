@@ -61,6 +61,15 @@ namespace Discharge.Services
             File.Move(tmp, file, overwrite: true);
         }
 
+        /// <summary>匯入前備份目前的資料檔，回傳備份檔的路徑；還沒有資料檔就回傳 null。</summary>
+        public static string? BackupBeforeImport()
+        {
+            if (!File.Exists(DataFile)) return null;
+            var backup = Path.Combine(DataDirectory, $"data.before-import-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+            File.Copy(DataFile, backup, overwrite: true);
+            return backup;
+        }
+
         public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
 
         /// <summary>完整複製一份（編輯機台表單時用複本，按「儲存」才寫回）。</summary>
