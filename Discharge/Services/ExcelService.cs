@@ -18,9 +18,13 @@ namespace Discharge.Services
     {
         public List<Material>? Materials { get; set; }
         public List<Machine>? Machines { get; set; }
+        public List<FunctionRule>? Rules { get; set; }
 
         /// <summary>檔案有「出料明細」工作表。沒有的話，既有機台的料不動。</summary>
         public bool HasItems { get; set; }
+
+        /// <summary>「機台」工作表有「功能」欄。舊版匯出的檔案沒有，既有機台選的功能不動。</summary>
+        public bool HasFunctions { get; set; }
 
         /// <summary>檔案裡工令和機台名稱重複、被併成一張的表單數。</summary>
         public int MergedForms { get; set; }
@@ -28,21 +32,24 @@ namespace Discharge.Services
         /// <summary>讀不懂的列。有任何一筆就不匯入，免得只進來一半。</summary>
         public List<string> Errors { get; } = new();
 
-        public bool IsEmpty => Materials == null && Machines == null;
+        public bool IsEmpty => Materials == null && Machines == null && Rules == null;
         public int ItemCount => Machines?.Sum(m => m.Items.Count) ?? 0;
     }
 
-    public record ImportResult(int MaterialsAdded, int MaterialsUpdated, int MaterialsSkipped, int MachinesAdded, int MachinesUpdated);
+    public record ImportResult(int MaterialsAdded, int MaterialsUpdated, int MaterialsSkipped, int MachinesAdded, int MachinesUpdated,
+        int RulesAdded = 0, int RulesUpdated = 0);
 
     /// <summary>
-    /// Excel 匯出 / 匯入。三張工作表：「物料資料庫」一列一項物料、「機台」一列一張表單、
-    /// 「出料明細」一列一項料，用工令和機台名稱對應回表單。匯入時依第一列的標題找欄位，順序可以調換。
+    /// Excel 匯出 / 匯入。四張工作表：「物料資料庫」一列一項物料、「機台」一列一張表單、
+    /// 「出料明細」一列一項料，用工令和機台名稱對應回表單、「功能規則」一列一條規則上的一項料。
+    /// 匯入時依第一列的標題找欄位，順序可以調換。
     /// </summary>
     public static class ExcelService
     {
         public const string MaterialSheet = "物料資料庫";
         public const string MachineSheet = "機台";
         public const string ItemSheet = "出料明細";
+        public const string RuleSheet = "功能規則";
 
         private const string HPartNo = "料號";
         private const string HName = "名稱";
@@ -53,6 +60,11 @@ namespace Discharge.Services
         private const string HQuantity = "數量";
         private const string HCreated = "建立時間";
         private const string HUpdated = "最後儲存";
+        private const string HFunction = "功能";
+        private const string HSources = "來源功能";
+
+        private const char ListSeparator = '、';
+        private const char QuantitySeparator = '×';
 
         private const string DateFormat = "yyyy/mm/dd hh:mm";
         private const double MaxColumnWidth = 60;
@@ -80,7 +92,7 @@ namespace Discharge.Services
                 .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var machines = StartSheet(wb, MachineSheet, HWorkOrder, HMachineName, HCreated, HUpdated);
+            var machines = StartSheet(wb, MachineSheet, HWorkOrder, HMachineName, HCreated, HUpdated, HFunction);
             AsText(machines, 1);
             row = 2;
             foreach (var m in ordered)
@@ -89,11 +101,12 @@ namespace Discharge.Services
                 machines.Cell(row, 2).Value = m.Name;
                 machines.Cell(row, 3).Value = m.CreatedAt;
                 machines.Cell(row, 4).Value = m.UpdatedAt;
+                machines.Cell(row, 5).Value = string.Join(ListSeparator, m.Functions.Select(f => f.Name));
                 machines.Range(row, 3, row, 4).Style.DateFormat.Format = DateFormat;
                 row++;
             }
 
-            var items = StartSheet(wb, ItemSheet, HWorkOrder, HMachineName, HPartNo, HName, HSpec, HQuantity, HNote);
+            var items = StartSheet(wb, ItemSheet, HWorkOrder, HMachineName, HPartNo, HName, HSpec, HQuantity, HNote, HSources);
             AsText(items, 1);
             AsText(items, 3);
             row = 2;
@@ -108,6 +121,26 @@ namespace Discharge.Services
                     items.Cell(row, 5).Value = item.Spec;
                     items.Cell(row, 6).Value = item.Quantity;
                     items.Cell(row, 7).Value = item.Note;
+                    items.Cell(row, 8).Value = FormatSources(item.Sources);
+                    row++;
+                }
+            }
+
+            var rules = StartSheet(wb, RuleSheet, HFunction, HPartNo, HQuantity);
+            AsText(rules, 2);
+            row = 2;
+            foreach (var rule in data.Rules.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (rule.Items.Count == 0)
+                {
+                    rules.Cell(row++, 1).Value = rule.Name; // 還沒設定料的規則也要留著
+                    continue;
+                }
+                foreach (var item in rule.Items)
+                {
+                    rules.Cell(row, 1).Value = rule.Name;
+                    rules.Cell(row, 2).Value = item.PartNo;
+                    rules.Cell(row, 3).Value = item.Quantity;
                     row++;
                 }
             }
@@ -148,7 +181,8 @@ namespace Discharge.Services
 
             wb.TryGetWorksheet(MachineSheet, out var machineSheet);
             wb.TryGetWorksheet(ItemSheet, out var itemSheet);
-            if (!wb.TryGetWorksheet(MaterialSheet, out var materialSheet) && machineSheet == null && itemSheet == null)
+            wb.TryGetWorksheet(RuleSheet, out var ruleSheet);
+            if (!wb.TryGetWorksheet(MaterialSheet, out var materialSheet) && machineSheet == null && itemSheet == null && ruleSheet == null)
             {
                 // 不是這個程式匯出的檔案：第一張工作表有「料號」標題，就當成物料清單
                 var first = wb.Worksheets.FirstOrDefault();
@@ -158,7 +192,60 @@ namespace Discharge.Services
 
             if (materialSheet != null) ReadMaterials(materialSheet, result);
             if (machineSheet != null || itemSheet != null) ReadMachines(machineSheet, itemSheet, result);
+            if (ruleSheet != null) ReadRules(ruleSheet, result);
             return result;
+        }
+
+        private static void ReadRules(IXLWorksheet ws, ExcelImport result)
+        {
+            var columns = HeaderColumns(ws);
+            if (!Require(ws, columns, result, HFunction, HPartNo, HQuantity)) return;
+
+            var rules = new List<FunctionRule>();
+            foreach (var row in ws.RowsUsed().Skip(1))
+            {
+                var name = Text(row, columns, HFunction);
+                var partNo = Text(row, columns, HPartNo);
+                var quantityText = Text(row, columns, HQuantity);
+                if (name.Length == 0 && partNo.Length == 0 && quantityText.Length == 0) continue;
+
+                var where = $"「{ws.Name}」第 {row.RowNumber()} 列";
+                if (FunctionRules.Validate(new FunctionRule { Name = name }, Array.Empty<FunctionRule>()) is { } nameError)
+                {
+                    result.Errors.Add($"{where}：{nameError}");
+                    continue;
+                }
+                var rule = rules.FirstOrDefault(r => FunctionRules.SameName(r.Name, name));
+                if (rule == null) rules.Add(rule = new FunctionRule { Name = name });
+                if (partNo.Length == 0) continue; // 還沒設定料的規則
+
+                if (!TryQuantity(row.Cell(columns[HQuantity]), out var quantity) || quantity <= 0)
+                {
+                    result.Errors.Add($"{where}：數量要是大於 0 的數字（目前是「{quantityText}」）。");
+                    continue;
+                }
+                var existing = rule.Items.FirstOrDefault(i => MaterialRules.SamePartNo(i.PartNo, partNo));
+                if (existing != null) existing.Quantity += quantity;
+                else rule.Items.Add(new RuleItem { PartNo = partNo, Quantity = quantity });
+            }
+            result.Rules = rules;
+        }
+
+        /// <summary>例如「正逆轉×2、變頻×1」。</summary>
+        private static string FormatSources(IEnumerable<ItemSource> sources) => string.Join(ListSeparator,
+            sources.Select(s => $"{s.RuleName}{QuantitySeparator}{s.Quantity.ToString("0.##########", CultureInfo.InvariantCulture)}"));
+
+        private static bool TryParseSources(string text, out List<ItemSource> sources)
+        {
+            sources = new List<ItemSource>();
+            foreach (var part in text.Split(ListSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var at = part.LastIndexOf(QuantitySeparator);
+                if (at <= 0 || !decimal.TryParse(part[(at + 1)..], NumberStyles.Number, CultureInfo.InvariantCulture, out var quantity) || quantity <= 0)
+                    return false;
+                sources.Add(new ItemSource { RuleName = part[..at].Trim(), Quantity = quantity });
+            }
+            return true;
         }
 
         private static void ReadMaterials(IXLWorksheet ws, ExcelImport result)
@@ -180,6 +267,7 @@ namespace Discharge.Services
             {
                 var columns = HeaderColumns(machineSheet);
                 if (!Require(machineSheet, columns, result, HWorkOrder, HMachineName)) return;
+                result.HasFunctions = columns.ContainsKey(HFunction);
                 foreach (var row in machineSheet.RowsUsed().Skip(1))
                 {
                     var workOrder = Text(row, columns, HWorkOrder);
@@ -198,6 +286,8 @@ namespace Discharge.Services
                     var machine = new Machine { WorkOrder = workOrder, Name = name };
                     if (Date(row, columns, HCreated) is { } created) machine.CreatedAt = created;
                     if (Date(row, columns, HUpdated) is { } updated) machine.UpdatedAt = updated;
+                    foreach (var function in Text(row, columns, HFunction).Split(ListSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        machine.Functions.Add(new MachineFunction { Name = function });
                     forms[FormKey(workOrder, name)] = machine;
                 }
             }
@@ -239,14 +329,27 @@ namespace Discharge.Services
                 return;
             }
 
+            var sourcesText = Text(row, columns, HSources);
+            if (!TryParseSources(sourcesText, out var sources))
+            {
+                result.Errors.Add($"{where}：來源功能要寫成「功能×數量」（目前是「{sourcesText}」）。");
+                return;
+            }
+
             // 只有明細、「機台」工作表沒寫的表單也建起來，料才不會不見
             if (!forms.TryGetValue(FormKey(workOrder, name), out var machine))
                 forms[FormKey(workOrder, name)] = machine = new Machine { WorkOrder = workOrder, Name = name };
+
+            // 來源功能有寫的，表單也要算選了這個功能，之後才取消得掉
+            foreach (var source in sources)
+                if (!machine.Functions.Any(f => FunctionRules.SameName(f.Name, source.RuleName)))
+                    machine.Functions.Add(new MachineFunction { Name = source.RuleName });
 
             var existing = machine.Items.FirstOrDefault(i => MaterialRules.SamePartNo(i.PartNo, partNo));
             if (existing != null)
             {
                 existing.Quantity += quantity;
+                existing.Sources.AddRange(sources);
                 return;
             }
             machine.Items.Add(new MachineItem
@@ -256,6 +359,7 @@ namespace Discharge.Services
                 Spec = Text(row, columns, HSpec),
                 Quantity = quantity,
                 Note = Text(row, columns, HNote),
+                Sources = sources,
             });
         }
 
@@ -330,12 +434,44 @@ namespace Discharge.Services
         /// </summary>
         public static ImportResult Apply(AppData target, ExcelImport file, ImportMode mode)
         {
-            int materialsAdded = 0, materialsUpdated = 0, materialsSkipped = 0, machinesAdded = 0, machinesUpdated = 0;
+            int materialsAdded = 0, materialsUpdated = 0, materialsSkipped = 0, machinesAdded = 0, machinesUpdated = 0, rulesAdded = 0, rulesUpdated = 0;
 
             if (file.Materials != null)
             {
                 if (mode == ImportMode.Replace) target.Materials.Clear();
                 (materialsAdded, materialsUpdated, materialsSkipped) = MaterialRules.Merge(target.Materials, file.Materials);
+            }
+
+            if (file.Rules != null)
+            {
+                var touchedRules = new HashSet<FunctionRule>();
+                foreach (var imported in file.Rules)
+                {
+                    var rule = target.Rules.FirstOrDefault(r => FunctionRules.SameName(r.Name, imported.Name));
+                    if (rule == null)
+                    {
+                        rule = new FunctionRule { Name = imported.Name };
+                        target.Rules.Add(rule);
+                        rulesAdded++;
+                    }
+                    else
+                    {
+                        rulesUpdated++;
+                    }
+                    rule.Items = imported.Items.Select(i => new RuleItem { PartNo = i.PartNo, Quantity = i.Quantity }).ToList();
+                    touchedRules.Add(rule);
+                }
+                if (mode == ImportMode.Replace) target.Rules.RemoveAll(r => !touchedRules.Contains(r));
+            }
+
+            // Excel 上只有功能名稱，用名稱對回規則；規則刪掉了就沿用表單原本的編號，都沒有才給新的
+            var ruleIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in target.Rules) ruleIds[r.Name.Trim()] = r.Id;
+            foreach (var f in target.Machines.SelectMany(m => m.Functions)) ruleIds.TryAdd(f.Name.Trim(), f.RuleId);
+            string RuleIdOf(string name)
+            {
+                if (!ruleIds.TryGetValue(name.Trim(), out var id)) ruleIds[name.Trim()] = id = Guid.NewGuid().ToString("N");
+                return id;
             }
 
             if (file.Machines != null)
@@ -357,9 +493,11 @@ namespace Discharge.Services
                     }
 
                     existing.UpdatedAt = imported.UpdatedAt;
+                    if (file.HasFunctions || file.HasItems && imported.Functions.Count > 0)
+                        existing.Functions = imported.Functions.Select(f => new MachineFunction { RuleId = RuleIdOf(f.Name), Name = f.Name }).ToList();
                     if (file.HasItems)
                     {
-                        existing.Items = imported.Items.Select(CopyItem).ToList();
+                        existing.Items = imported.Items.Select(i => CopyItem(i, RuleIdOf)).ToList();
                         FillBlanks(existing.Items, target.Materials);
                     }
                     touched.Add(existing);
@@ -373,16 +511,17 @@ namespace Discharge.Services
             foreach (var item in target.Machines.SelectMany(m => m.Items))
                 item.MaterialId = byPartNo.TryGetValue(item.PartNo.Trim(), out var material) ? material.Id : "";
 
-            return new ImportResult(materialsAdded, materialsUpdated, materialsSkipped, machinesAdded, machinesUpdated);
+            return new ImportResult(materialsAdded, materialsUpdated, materialsSkipped, machinesAdded, machinesUpdated, rulesAdded, rulesUpdated);
         }
 
-        private static MachineItem CopyItem(MachineItem i) => new()
+        private static MachineItem CopyItem(MachineItem i, Func<string, string> ruleIdOf) => new()
         {
             PartNo = i.PartNo,
             Name = i.Name,
             Spec = i.Spec,
             Quantity = i.Quantity,
             Note = i.Note,
+            Sources = i.Sources.Select(s => new ItemSource { RuleId = ruleIdOf(s.RuleName), RuleName = s.RuleName, Quantity = s.Quantity }).ToList(),
         };
 
         /// <summary>明細沒寫名稱、規格時，用資料庫的補上。</summary>

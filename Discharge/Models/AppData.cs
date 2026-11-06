@@ -5,5 +5,6 @@ namespace Discharge.Models
     {
         public List<Material> Materials { get; set; } = new();
         public List<Machine> Machines { get; set; } = new();
+        public List<FunctionRule> Rules { get; set; } = new();
     }
 }

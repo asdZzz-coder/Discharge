@@ -48,9 +48,10 @@ namespace Discharge.Services
             return (added, merged);
         }
 
-        /// <summary>搜尋工令、機台名稱，以及表單上料件的料號、名稱、規格。</summary>
+        /// <summary>搜尋工令、機台名稱、選的功能，以及表單上料件的料號、名稱、規格。</summary>
         public static bool Matches(Machine m, string? query) =>
             TextRules.Matches(query, new[] { m.WorkOrder, m.Name }
+                .Concat(m.Functions.Select(f => f.Name))
                 .Concat(m.Items.SelectMany(i => new[] { i.PartNo, i.Name, i.Spec }))
                 .ToArray());
     }

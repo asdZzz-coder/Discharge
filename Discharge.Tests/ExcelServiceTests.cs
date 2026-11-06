@@ -283,6 +283,144 @@ namespace Discharge.Tests
             Assert.Single(file.Errors);
         }
 
+        private static AppData SampleWithRules()
+        {
+            var data = new AppData
+            {
+                Materials =
+                {
+                    new Material { PartNo = "NFB-100", Name = "無熔絲開關", Spec = "3P 100A" },
+                    new Material { PartNo = "T-01", Name = "端子台", Spec = "10P" },
+                },
+                Rules =
+                {
+                    new FunctionRule { Name = "正逆轉", Items = { new RuleItem { PartNo = "NFB-100", Quantity = 2.5m }, new RuleItem { PartNo = "T-01", Quantity = 4 } } },
+                    new FunctionRule { Name = "變頻", Items = { new RuleItem { PartNo = "T-01", Quantity = 1 } } },
+                    new FunctionRule { Name = "還沒設定料" },
+                },
+            };
+            var machine = new Machine { WorkOrder = "W001", Name = "配電盤" };
+            FunctionRules.AddFunction(machine.Items, machine.Functions, data.Rules[0], data.Materials);
+            FunctionRules.AddFunction(machine.Items, machine.Functions, data.Rules[1], data.Materials);
+            data.Machines.Add(machine);
+            return data;
+        }
+
+        [Fact]
+        public void ExportThenImport_RestoresRulesAndFunctions_AndCancelStillWorks()
+        {
+            var path = PathOf("a.xlsx");
+            ExcelService.Export(SampleWithRules(), path);
+
+            var file = ExcelService.Read(path);
+            Assert.Empty(file.Errors);
+            var target = new AppData();
+            var result = ExcelService.Apply(target, file, ImportMode.Merge);
+
+            Assert.Equal((3, 0), (result.RulesAdded, result.RulesUpdated));
+            var rule = target.Rules.Single(r => r.Name == "正逆轉");
+            Assert.Equal(2.5m, rule.Items.Single(i => i.PartNo == "NFB-100").Quantity);
+            Assert.Empty(target.Rules.Single(r => r.Name == "還沒設定料").Items);
+
+            var machine = target.Machines.Single();
+            Assert.Equal(new[] { "正逆轉", "變頻" }, machine.Functions.Select(f => f.Name));
+            Assert.Equal(rule.Id, machine.Functions[0].RuleId);
+            var terminal = machine.Items.Single(i => i.PartNo == "T-01");
+            Assert.Equal((5m, "正逆轉、變頻"), (terminal.Quantity, terminal.FunctionText));
+
+            // 匯入後取消功能，一樣能正確扣回去
+            FunctionRules.RemoveFunction(machine.Items, machine.Functions, rule.Id);
+            Assert.Equal(1m, machine.Items.Single().Quantity);
+            Assert.Equal("變頻", machine.Functions.Single().Name);
+        }
+
+        [Fact]
+        public void Merge_SameRuleName_KeepsIdAndReplacesItems_OtherRulesStay()
+        {
+            var path = MakeWorkbook((ExcelService.RuleSheet, new[]
+            {
+                new object[] { "功能", "料號", "數量" },
+                new object[] { "A", "X", 2d },
+                new object[] { "A", "x", 3d },   // 同一項料加總
+                new object[] { "新規則", "", "" },
+            }));
+            var keep = new FunctionRule { Name = "只有本機有" };
+            var same = new FunctionRule { Name = "a", Items = { new RuleItem { PartNo = "OLD", Quantity = 9 } } };
+            var target = new AppData { Rules = { keep, same } };
+
+            var result = ExcelService.Apply(target, ExcelService.Read(path), ImportMode.Merge);
+
+            Assert.Equal((1, 1), (result.RulesAdded, result.RulesUpdated));
+            Assert.Contains(keep, target.Rules);
+            Assert.Same(same, target.Rules.Single(r => r.Id == same.Id));
+            Assert.Equal(("X", 5m), (same.Items.Single().PartNo, same.Items.Single().Quantity));
+        }
+
+        [Fact]
+        public void Replace_RemovesRulesNotInFile_ButWithoutRuleSheetKeepsThem()
+        {
+            var rulesFile = MakeWorkbook((ExcelService.RuleSheet, new[] { new object[] { "功能", "料號", "數量" }, new object[] { "A", "X", 1d } }));
+            var materialsFile = MakeWorkbook((ExcelService.MaterialSheet, new[] { new object[] { "料號", "名稱" }, new object[] { "X", "料" } }));
+
+            var target = new AppData { Rules = { new FunctionRule { Name = "舊" } } };
+            ExcelService.Apply(target, ExcelService.Read(materialsFile), ImportMode.Replace);
+            Assert.Equal("舊", target.Rules.Single().Name);
+
+            ExcelService.Apply(target, ExcelService.Read(rulesFile), ImportMode.Replace);
+            Assert.Equal("A", target.Rules.Single().Name);
+        }
+
+        [Fact]
+        public void Read_OldExportWithoutFunctionColumns_StillWorks_AndKeepsFormFunctions()
+        {
+            var path = MakeWorkbook(
+                (ExcelService.MachineSheet, new[] { new object[] { "工令", "機台名稱" }, new object[] { "W001", "A" } }),
+                (ExcelService.ItemSheet, new[]
+                {
+                    new object[] { "工令", "機台名稱", "料號", "數量" },
+                    new object[] { "W001", "A", "X", 1d },
+                }));
+            var target = new AppData { Machines = { new Machine { WorkOrder = "W001", Name = "A", Functions = { new MachineFunction { RuleId = "r1", Name = "舊功能" } } } } };
+
+            var file = ExcelService.Read(path);
+            Assert.Empty(file.Errors);
+            Assert.False(file.HasFunctions);
+            ExcelService.Apply(target, file, ImportMode.Merge);
+
+            Assert.Equal("舊功能", target.Machines.Single().Functions.Single().Name);
+            Assert.Empty(target.Machines.Single().Items.Single().Sources);
+        }
+
+        [Theory]
+        [InlineData("功能A")]       // 沒有數量
+        [InlineData("功能A×abc")]   // 數量不是數字
+        [InlineData("×2")]          // 沒有名稱
+        public void Read_BadSources_IsAnError(string sources)
+        {
+            var path = MakeWorkbook((ExcelService.ItemSheet, new[]
+            {
+                new object[] { "工令", "機台名稱", "料號", "數量", "來源功能" },
+                new object[] { "W001", "A", "X", 1d, sources },
+            }));
+
+            Assert.Contains("來源功能", Assert.Single(ExcelService.Read(path).Errors));
+        }
+
+        [Theory]
+        [InlineData("A", "X", "abc")]  // 數量錯
+        [InlineData("", "X", "1")]     // 沒寫功能
+        [InlineData("A、B", "X", "1")] // 名稱有保留字元
+        public void Read_BadRuleRows_AreErrors(string name, string partNo, string quantity)
+        {
+            var path = MakeWorkbook((ExcelService.RuleSheet, new[]
+            {
+                new object[] { "功能", "料號", "數量" },
+                new object[] { name, partNo, quantity },
+            }));
+
+            Assert.Contains("第 2 列", Assert.Single(ExcelService.Read(path).Errors));
+        }
+
         [Fact]
         public void Merge_SkipsNewMaterialsWithoutName()
         {

@@ -28,7 +28,7 @@
             <Button Grid.Column="2" x:Name="OkButton" Style="{StaticResource PrimaryButton}" Click="Ok_Click" Padding="20,9">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
-                    <TextBlock Text="加入表單" />
+                    <TextBlock x:Name="OkText" Text="加入表單" />
                 </StackPanel>
             </Button>
         </Grid>

@@ -1,0 +1,155 @@
+<UserControl x:Class="Discharge.Views.RulesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="330" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 左：規則清單 -->
+        <Border Style="{StaticResource Card}" Padding="14,16">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" Margin="4,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="功能規則" Style="{StaticResource SectionTitle}" />
+                    <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0" HorizontalAlignment="Left">
+                        <TextBlock x:Name="RuleCountText" Style="{StaticResource ChipText}" />
+                    </Border>
+                    <Button Grid.Column="2" x:Name="NewRuleButton" Style="{StaticResource PrimaryButton}" Click="NewRule_Click" Padding="12,7">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                            <TextBlock Text="新增規則" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+                <TextBox DockPanel.Dock="Top" x:Name="RuleSearchBox" Style="{StaticResource SearchBox}"
+                         Tag="搜尋功能名稱、料號…" Margin="0,0,0,10" TextChanged="RuleSearch_TextChanged" />
+                <Grid>
+                    <ListBox x:Name="RuleList" Style="{StaticResource SideList}" IsSynchronizedWithCurrentItem="False"
+                             SelectionChanged="RuleList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding ItemCount, StringFormat={}{0} 項}" Style="{StaticResource ChipText}" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="RuleEmptyText" Style="{StaticResource EmptyText}" />
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- 右：規則內容 -->
+        <Border Grid.Column="2" Style="{StaticResource Card}" Padding="22,20">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="RuleTitle" Style="{StaticResource PageTitle}" />
+                            <Border x:Name="RuleUnsavedChip" Style="{StaticResource Chip}" Margin="10,2,0,0"
+                                    Background="{StaticResource WarningSoftBrush}" BorderBrush="#FDE68A" Visibility="Collapsed">
+                                <TextBlock Text="尚未儲存" Style="{StaticResource ChipText}" Foreground="{StaticResource WarningBrush}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
+                                   Text="機台表單選了這個功能，就會帶出下面的料。" />
+                    </StackPanel>
+                    <Button Grid.Column="1" x:Name="DeleteRuleButton" Style="{StaticResource DangerButton}"
+                            Click="DeleteRule_Click" VerticalAlignment="Top">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74D;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="刪除規則" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,20">
+                    <TextBlock Text="功能名稱 *" Style="{StaticResource FieldLabel}" />
+                    <TextBox x:Name="RuleNameBox" TextChanged="RuleName_TextChanged" />
+                </StackPanel>
+
+                <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource HintText}" Text="數量可以在表格上直接修改。改規則不會影響已經建好的機台表單。按 Ctrl+S 儲存。" />
+                    <Button Grid.Column="1" Style="{StaticResource GhostButton}" Click="Revert_Click" Margin="8,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE7A7;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="還原變更" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" x:Name="SaveRuleButton" Style="{StaticResource PrimaryButton}" Click="Save_Click" Padding="20,9">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74E;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="儲存" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="帶出的料" Style="{StaticResource SectionTitle}" />
+                    <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0" HorizontalAlignment="Left">
+                        <TextBlock x:Name="RuleItemCountText" Style="{StaticResource ChipText}" />
+                    </Border>
+                    <Button Grid.Column="2" Click="RemoveItems_Click" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE738;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="移除選取的料" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="3" x:Name="RulePickButton" Style="{StaticResource PrimaryButton}" Click="Pick_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                            <TextBlock Text="從資料庫選料" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10" Padding="1">
+                    <Grid>
+                        <DataGrid x:Name="RuleItemGrid" SelectionMode="Extended" CellEditEnding="RuleItemGrid_CellEditEnding">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="料號" Binding="{Binding PartNo}" IsReadOnly="True" Width="150"
+                                                    ElementStyle="{StaticResource StrongCell}" />
+                                <DataGridTextColumn Header="名稱" Binding="{Binding Name}" IsReadOnly="True" Width="*" />
+                                <DataGridTextColumn Header="規格" Binding="{Binding Spec}" IsReadOnly="True" Width="1.3*"
+                                                    ElementStyle="{StaticResource MutedCell}" />
+                                <DataGridTextColumn Header="數量" Binding="{Binding Quantity}" Width="80" HeaderStyle="{StaticResource NumberHeader}"
+                                                    ElementStyle="{StaticResource NumberCell}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock x:Name="RuleItemEmptyText" Style="{StaticResource EmptyText}"
+                                   Text="還沒有料，按右上的「從資料庫選料」加入" />
+                    </Grid>
+                </Border>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

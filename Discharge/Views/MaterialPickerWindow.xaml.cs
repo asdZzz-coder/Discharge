@@ -14,21 +14,25 @@ namespace Discharge.Views
     {
         private readonly List<PickRow> _rows;
         private readonly ListCollectionView _view;
+        private readonly string _target;
 
-        /// <summary>按「加入表單」後的結果：勾選的物料和數量。</summary>
+        /// <summary>按「加入」後的結果：勾選的物料和數量。</summary>
         public List<(Material Material, decimal Quantity)> Picks { get; } = new();
 
-        public MaterialPickerWindow(IEnumerable<Material> materials, IEnumerable<MachineItem> inForm)
+        /// <param name="target">要加進哪裡，顯示用（表單、規則）。</param>
+        public MaterialPickerWindow(IEnumerable<Material> materials, IEnumerable<MachineItem> inForm, string target = "表單")
         {
             InitializeComponent();
+            _target = target;
+            OkText.Text = $"加入{target}";
 
-            // 表單上已經有的料號和數量，列表上標示「已在表單」
+            // 已經有的料號和數量，列表上標示「已在表單」
             var existing = inForm
                 .GroupBy(i => i.PartNo.Trim(), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity), StringComparer.OrdinalIgnoreCase);
             _rows = materials
                 .OrderBy(m => m.PartNo, StringComparer.OrdinalIgnoreCase)
-                .Select(m => new PickRow(m, existing.GetValueOrDefault(m.PartNo.Trim())))
+                .Select(m => new PickRow(m, existing.GetValueOrDefault(m.PartNo.Trim()), target))
                 .ToList();
             foreach (var row in _rows) row.PropertyChanged += (_, _) => UpdateSummary();
 
@@ -101,7 +105,7 @@ namespace Discharge.Views
             if (again.Count > 0)
             {
                 var names = string.Join("\n", again.Take(10).Select(r => $"{r.Material.PartNo} {r.Material.Name}")) + (again.Count > 10 ? "\n…" : "");
-                if (MessageBox.Show($"下面 {again.Count} 項已經在表單上，加入後會把數量加上去：\n\n{names}\n\n要繼續嗎？",
+                if (MessageBox.Show($"下面 {again.Count} 項已經在{_target}上，加入後會把數量加上去：\n\n{names}\n\n要繼續嗎？",
                         Title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
             }
@@ -114,18 +118,21 @@ namespace Discharge.Views
     /// <summary>選料視窗的一列。</summary>
     public class PickRow : INotifyPropertyChanged
     {
-        public PickRow(Material material, decimal inForm)
+        private readonly string _target;
+
+        public PickRow(Material material, decimal inForm, string target)
         {
             Material = material;
             InForm = inForm;
+            _target = target;
         }
 
         public Material Material { get; }
 
-        /// <summary>這張表單上已經有的數量（0 表示還沒有）。</summary>
+        /// <summary>已經有的數量（0 表示還沒有）。</summary>
         public decimal InForm { get; }
 
-        public string Status => InForm > 0 ? $"已在表單（{InForm:0.##}）" : "";
+        public string Status => InForm > 0 ? $"已在{_target}（{InForm:0.##}）" : "";
 
         private bool _selected;
         public bool Selected

@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using Discharge.Models;
@@ -28,8 +30,11 @@ namespace Discharge
         private ObservableCollection<MachineItem> _draftItems = new();
         private string _savedSnapshot = "";            // 載入時的內容，用來判斷有沒有沒存的變更
         private bool _suppressSelection;
+        private ListCollectionView? _chipView;         // 機台表單上的功能按鈕
 
         private Material? _editingMaterial;            // 物料資料庫右邊表單正在修改的物料；新增中為 null
+        private List<MaterialRuleRow> _materialRuleRows = new();
+        private bool _suppressPageTab;
 
         public MainWindow(AppData data)
         {
@@ -52,9 +57,44 @@ namespace Discharge
             };
             _materialView.SortDescriptions.Add(new SortDescription(nameof(Material.PartNo), ListSortDirection.Ascending));
             MaterialGrid.ItemsSource = _materialView;
+            FunctionRules.FillFunctionText(_data.Materials, _data.Rules);
 
+            RulesEditor.Initialize(_data, Persist, text => MessageText.Text = text, OnRulesChanged);
             LoadMachine(null);
             ClearMaterialForm();
+            UpdateCounts();
+        }
+
+        /// <summary>規則存檔或刪除後，物料的「帶出的功能」和機台表單上的功能按鈕跟著更新。</summary>
+        private void OnRulesChanged()
+        {
+            RefreshMaterials();
+            LoadMaterialRules(_editingMaterial?.PartNo);
+
+            CommitItemEdits();
+            if (Snapshot() == _savedSnapshot)
+            {
+                LoadMachine(_editing); // 規則可能改名，表單沒改過就直接重新載入
+                return;
+            }
+            FormToMachine();
+            foreach (var rule in _data.Rules) FunctionRules.RenameFunction(new[] { _draft }, rule.Id, rule.Name);
+            ItemGrid.Items.Refresh();
+            RebuildFunctionChips();
+            UpdateCounts();
+        }
+
+        private void RefreshMaterials()
+        {
+            FunctionRules.FillFunctionText(_data.Materials, _data.Rules);
+            _materialView.Refresh();
+        }
+
+        /// <summary>物料或規則上的料號變了：規則頁重新查一次名稱、規格。</summary>
+        private void AfterMaterialsChanged()
+        {
+            RefreshMaterials();
+            RulesEditor.Reload();
             UpdateCounts();
         }
 
@@ -96,23 +136,40 @@ namespace Discharge
 
         private void PageTab_Checked(object sender, RoutedEventArgs e)
         {
-            if (MachinesPage == null || sender is not RadioButton { Tag: string page }) return; // InitializeComponent 期間
+            if (RulesPage == null || _suppressPageTab || sender is not RadioButton { Tag: string page }) return; // InitializeComponent 期間
+
+            // 離開規則頁前先存好，別的頁面才看得到最新的規則
+            if (RulesPage.Visibility == Visibility.Visible && page != "2" && !RulesEditor.ConfirmLeave())
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _suppressPageTab = true;
+                    RulesTabButton.IsChecked = true;
+                    _suppressPageTab = false;
+                });
+                return;
+            }
             MachinesPage.Visibility = page == "0" ? Visibility.Visible : Visibility.Collapsed;
             MaterialsPage.Visibility = page == "1" ? Visibility.Visible : Visibility.Collapsed;
+            RulesPage.Visibility = page == "2" ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        private void ManageRules_Click(object sender, RoutedEventArgs e) => RulesTabButton.IsChecked = true;
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control && MachinesPage.IsVisible)
-            {
-                SaveMachine();
-                e.Handled = true;
-            }
+            if (e.Key != Key.S || Keyboard.Modifiers != ModifierKeys.Control) return;
+            if (MachinesPage.IsVisible) SaveMachine();
+            else if (RulesPage.IsVisible) RulesEditor.Save();
+            else return;
+            e.Handled = true;
         }
+
+        private bool ConfirmLeaveAll() => ConfirmLeaveMachine() && RulesEditor.ConfirmLeave();
 
         private void Window_Closing(object? sender, CancelEventArgs e)
         {
-            if (!ConfirmLeaveMachine()) e.Cancel = true;
+            if (!ConfirmLeaveAll()) e.Cancel = true;
         }
 
         // ---------- 機台表單 ----------
@@ -127,10 +184,78 @@ namespace Discharge
             ItemGrid.ItemsSource = _draftItems;
             FormTitle.Text = m == null ? "新增機台" : $"{m.WorkOrder}　{m.Name}";
             FormSubtitle.Text = m == null
-                ? "填好工令和機台名稱，再從資料庫選料，最後按「儲存」。"
+                ? "填好工令和機台名稱，選工單上的功能帶出料，最後按「儲存」。"
                 : $"建立於 {m.CreatedAt:yyyy/MM/dd HH:mm}　·　最後儲存 {m.UpdatedAt:yyyy/MM/dd HH:mm}";
             DeleteMachineButton.Visibility = m != null ? Visibility.Visible : Visibility.Collapsed;
+            RebuildFunctionChips();
             _savedSnapshot = Snapshot();
+            UpdateCounts();
+        }
+
+        // ---------- 工單功能：選了就帶出料 ----------
+
+        private void RebuildFunctionChips()
+        {
+            var chips = _data.Rules
+                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(r => new FunctionChip { RuleId = r.Id, Name = r.Name, IsSelected = _draft.Functions.Any(f => f.RuleId == r.Id) })
+                .ToList();
+            // 規則刪掉了，但這張表單當初選過：留著才取消得掉
+            chips.AddRange(_draft.Functions
+                .Where(f => _data.Rules.All(r => r.Id != f.RuleId))
+                .Select(f => new FunctionChip { RuleId = f.RuleId, Name = f.Name, IsSelected = true, RuleDeleted = true }));
+
+            _chipView = new ListCollectionView(chips)
+            {
+                Filter = o => TextRules.Matches(FunctionFilterBox.Text, ((FunctionChip)o).Name),
+            };
+            FunctionChips.ItemsSource = _chipView;
+            UpdateFunctionHeader();
+        }
+
+        private void UpdateFunctionHeader()
+        {
+            FunctionCountText.Text = $"已選 {_draft.Functions.Count} 個";
+            FunctionEmptyText.Text = _data.Rules.Count == 0 && _draft.Functions.Count == 0
+                ? "還沒有功能規則，按右邊的「管理規則」新增。"
+                : _chipView?.Count == 0 ? "找不到符合的功能" : "";
+            FunctionEmptyText.Visibility = FunctionEmptyText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void FunctionFilter_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            _chipView?.Refresh();
+            if (_chipView != null) UpdateFunctionHeader();
+        }
+
+        /// <summary>按鈕顯示出來時也會收到 Checked，表單上已經選了就不用再帶一次。</summary>
+        private void FunctionChip_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (sender is not ToggleButton { DataContext: FunctionChip chip } button) return;
+            var selected = button.IsChecked == true;
+            if (selected == _draft.Functions.Any(f => f.RuleId == chip.RuleId)) return;
+            CommitItemEdits();
+
+            if (selected)
+            {
+                var rule = _data.Rules.FirstOrDefault(r => r.Id == chip.RuleId);
+                if (rule == null) return;
+                var (added, merged, missing) = FunctionRules.AddFunction(_draftItems, _draft.Functions, rule, _data.Materials);
+                var text = rule.Items.Count == 0
+                    ? $"「{rule.Name}」這條規則還沒有設定料"
+                    : $"「{rule.Name}」帶出 {added} 項料" + (merged > 0 ? $"，{merged} 項原本就在表單上，已把數量加上去" : "");
+                if (missing.Count > 0) text += $"。資料庫沒有這些料號，沒有帶出：{string.Join("、", missing)}";
+                MessageText.Text = text + "（記得儲存）";
+            }
+            else
+            {
+                var removed = FunctionRules.RemoveFunction(_draftItems, _draft.Functions, chip.RuleId);
+                MessageText.Text = $"取消「{chip.Name}」，移除 {removed} 項料（記得儲存）";
+                if (chip.RuleDeleted) Dispatcher.InvokeAsync(RebuildFunctionChips);
+            }
+
+            ItemGrid.Items.Refresh();
+            UpdateFunctionHeader();
             UpdateCounts();
         }
 
@@ -329,6 +454,7 @@ namespace Discharge
                 MaterialNoteBox.Text = m.Note;
                 MaterialFormTitle.Text = $"修改物料：{m.PartNo}";
                 UpdateMaterialButton.IsEnabled = true;
+                LoadMaterialRules(m.PartNo);
             }
             else
             {
@@ -345,6 +471,42 @@ namespace Discharge
             PartNoBox.Text = MaterialNameBox.Text = SpecBox.Text = MaterialNoteBox.Text = "";
             MaterialFormTitle.Text = "新增物料";
             UpdateMaterialButton.IsEnabled = false;
+            LoadMaterialRules(null);
+        }
+
+        /// <summary>物料表單上「哪些功能會帶出這項料」，partNo 是 null 就全部不勾。</summary>
+        private void LoadMaterialRules(string? partNo)
+        {
+            var current = partNo == null ? new Dictionary<string, decimal>() : FunctionRules.RulesOfPart(_data.Rules, partNo);
+            _materialRuleRows = _data.Rules
+                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(r => new MaterialRuleRow
+                {
+                    RuleId = r.Id,
+                    Name = r.Name,
+                    IsChecked = current.ContainsKey(r.Id),
+                    QuantityText = current.TryGetValue(r.Id, out var q) ? q.ToString("0.##########", CultureInfo.InvariantCulture) : "1",
+                })
+                .ToList();
+            MaterialRuleList.ItemsSource = _materialRuleRows;
+            MaterialRuleEmptyText.Visibility = _materialRuleRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            MaterialRuleScroll.Visibility = _materialRuleRows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        /// <summary>讀表單上勾選的功能和數量；數量不對就提示並回傳 null。</summary>
+        private Dictionary<string, decimal>? ReadMaterialRules(string title)
+        {
+            var wanted = new Dictionary<string, decimal>();
+            foreach (var row in _materialRuleRows.Where(r => r.IsChecked))
+            {
+                if (!row.TryQuantity(out var quantity))
+                {
+                    MessageBox.Show($"功能「{row.Name}」的數量要是大於 0 的數字。", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return null;
+                }
+                wanted[row.RuleId] = quantity;
+            }
+            return wanted;
         }
 
         private Material FormToMaterial(string id) => new()
@@ -369,9 +531,12 @@ namespace Discharge
         {
             var m = FormToMaterial(Guid.NewGuid().ToString("N"));
             if (!ValidateMaterial(m, "新增物料")) return;
+            var wanted = ReadMaterialRules("新增物料");
+            if (wanted == null) return;
             _data.Materials.Add(m);
+            FunctionRules.SetRulesOfPart(_data.Rules, m.PartNo, wanted);
             Persist();
-            _materialView.Refresh();
+            AfterMaterialsChanged();
             ClearMaterialForm();
             UpdateCounts();
             PartNoBox.Focus();
@@ -383,12 +548,16 @@ namespace Discharge
             if (_editingMaterial == null) return;
             var m = FormToMaterial(_editingMaterial.Id);
             if (!ValidateMaterial(m, "修改物料")) return;
+            var wanted = ReadMaterialRules("修改物料");
+            if (wanted == null) return;
+            FunctionRules.RenamePart(_data.Rules, _editingMaterial.PartNo, m.PartNo);
             _editingMaterial.PartNo = m.PartNo;
             _editingMaterial.Name = m.Name;
             _editingMaterial.Spec = m.Spec;
             _editingMaterial.Note = m.Note;
+            FunctionRules.SetRulesOfPart(_data.Rules, m.PartNo, wanted);
             Persist();
-            _materialView.Refresh();
+            AfterMaterialsChanged();
             MaterialFormTitle.Text = $"修改物料：{m.PartNo}";
             MessageText.Text = $"已儲存物料 {m.PartNo} {m.Name}";
         }
@@ -408,13 +577,17 @@ namespace Discharge
                 return;
             }
             var names = string.Join("\n", selected.Take(10).Select(m => $"{m.PartNo} {m.Name}")) + (selected.Count > 10 ? "\n…" : "");
-            if (MessageBox.Show($"確定要從資料庫刪除 {selected.Count} 項物料嗎？\n\n{names}\n\n已經建好的機台表單不受影響。",
+            var partNos = selected.Select(m => m.PartNo).ToList();
+            var ruleCount = FunctionRules.CountRulesUsing(_data.Rules, partNos);
+            var ruleText = ruleCount > 0 ? $"\n也會從 {ruleCount} 條功能規則上移除。" : "";
+            if (MessageBox.Show($"確定要從資料庫刪除 {selected.Count} 項物料嗎？\n\n{names}\n\n已經建好的機台表單不受影響。{ruleText}",
                     "刪除物料", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
 
             foreach (var m in selected) _data.Materials.Remove(m);
+            FunctionRules.RemoveParts(_data.Rules, partNos);
             Persist();
-            _materialView.Refresh();
+            AfterMaterialsChanged();
             ClearMaterialForm();
             UpdateCounts();
             MessageText.Text = $"已刪除 {selected.Count} 項物料";
@@ -444,7 +617,7 @@ namespace Discharge
 
             var (added, updated, skipped) = MaterialRules.Merge(_data.Materials, items);
             Persist();
-            _materialView.Refresh();
+            AfterMaterialsChanged();
             UpdateCounts();
             var message = $"新增 {added} 項、更新 {updated} 項物料。";
             if (skipped > 0) message += $"\n有 {skipped} 列沒有名稱，沒有加入。";
@@ -457,7 +630,7 @@ namespace Discharge
         private void Export_Click(object sender, RoutedEventArgs e)
         {
             const string title = "匯出 Excel";
-            if (!ConfirmLeaveMachine()) return; // 匯出的是存好的資料
+            if (!ConfirmLeaveAll()) return; // 匯出的是存好的資料
             var dlg = new SaveFileDialog
             {
                 Filter = "Excel 檔案 (*.xlsx)|*.xlsx",
@@ -474,14 +647,14 @@ namespace Discharge
                 MessageBox.Show($"匯出失敗（這個檔案可能正被 Excel 開著）：{ex.Message}", title, MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
-            MessageText.Text = $"已匯出 {_data.Materials.Count} 項物料、{_data.Machines.Count} 台機台到 {dlg.FileName}";
-            MessageBox.Show($"匯出完成：{_data.Materials.Count} 項物料、{_data.Machines.Count} 台機台。", title);
+            MessageText.Text = $"已匯出 {_data.Materials.Count} 項物料、{_data.Machines.Count} 台機台、{_data.Rules.Count} 條規則到 {dlg.FileName}";
+            MessageBox.Show($"匯出完成：{_data.Materials.Count} 項物料、{_data.Machines.Count} 台機台、{_data.Rules.Count} 條規則。", title);
         }
 
         private void Import_Click(object sender, RoutedEventArgs e)
         {
             const string title = "匯入 Excel";
-            if (!ConfirmLeaveMachine()) return;
+            if (!ConfirmLeaveAll()) return;
             var dlg = new OpenFileDialog { Filter = "Excel 檔案 (*.xlsx)|*.xlsx" };
             if (dlg.ShowDialog(this) != true) return;
 
@@ -504,7 +677,7 @@ namespace Discharge
             }
             if (file.IsEmpty)
             {
-                MessageBox.Show($"這個檔案裡找不到可以匯入的資料。\n\n要有「{ExcelService.MaterialSheet}」「{ExcelService.MachineSheet}」「{ExcelService.ItemSheet}」工作表，" +
+                MessageBox.Show($"這個檔案裡找不到可以匯入的資料。\n\n要有「{ExcelService.MaterialSheet}」「{ExcelService.MachineSheet}」「{ExcelService.ItemSheet}」「{ExcelService.RuleSheet}」工作表，" +
                     "或第一張工作表的第一列有「料號」標題（可以先按「匯出」產生一份範本）。", title);
                 return;
             }
@@ -529,10 +702,10 @@ namespace Discharge
 
             ReplaceData(next);
 
-            var message = $"物料：新增 {result.MaterialsAdded} 項、更新 {result.MaterialsUpdated} 項\n機台：新增 {result.MachinesAdded} 台、更新 {result.MachinesUpdated} 台";
+            var message = $"物料：新增 {result.MaterialsAdded} 項、更新 {result.MaterialsUpdated} 項\n機台：新增 {result.MachinesAdded} 台、更新 {result.MachinesUpdated} 台\n規則：新增 {result.RulesAdded} 條、更新 {result.RulesUpdated} 條";
             if (result.MaterialsSkipped > 0) message += $"\n有 {result.MaterialsSkipped} 項新物料沒有名稱，沒有加入。";
             if (backup != null) message += $"\n\n匯入前的資料備份在：\n{backup}";
-            MessageText.Text = $"匯入完成：物料 {_data.Materials.Count} 項、機台 {_data.Machines.Count} 台";
+            MessageText.Text = $"匯入完成：物料 {_data.Materials.Count} 項、機台 {_data.Machines.Count} 台、規則 {_data.Rules.Count} 條";
             MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
@@ -544,8 +717,11 @@ namespace Discharge
             _data.Materials.AddRange(next.Materials);
             _data.Machines.Clear();
             _data.Machines.AddRange(next.Machines);
-            _materialView.Refresh();
+            _data.Rules.Clear();
+            _data.Rules.AddRange(next.Rules);
+            RefreshMaterials();
             _machineView.Refresh();
+            RulesEditor.Reload();
             ClearMaterialForm();
 
             var current = _data.Machines.FirstOrDefault(m => m.Id == currentId);
@@ -599,7 +775,7 @@ namespace Discharge
                     $"發現新版本 {info.Version}（目前 {_updater.CurrentVersion}）。\n\n是否現在更新？更新完成後程式會自動重新啟動。",
                     "有新版本", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (answer != MessageBoxResult.Yes) return;
-                if (!ConfirmLeaveMachine()) return;
+                if (!ConfirmLeaveAll()) return;
                 LoadMachine(_editing); // 選了不儲存：丟掉變更，關閉時就不會再問一次
 
                 StatusText.Text = "下載更新中…";

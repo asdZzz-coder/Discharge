@@ -41,7 +41,14 @@ namespace Discharge.Services
                 var data = JsonSerializer.Deserialize<AppData>(File.ReadAllText(file), Options) ?? new AppData();
                 data.Materials ??= new();
                 data.Machines ??= new();
-                foreach (var m in data.Machines) m.Items ??= new();
+                data.Rules ??= new();
+                foreach (var m in data.Machines)
+                {
+                    m.Items ??= new();
+                    m.Functions ??= new();
+                    foreach (var item in m.Items) item.Sources ??= new();
+                }
+                foreach (var r in data.Rules) r.Items ??= new();
                 return data;
             }
             catch (JsonException ex)
