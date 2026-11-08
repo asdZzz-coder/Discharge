@@ -12,7 +12,26 @@ namespace Discharge.Views
         /// <summary>規則已經刪掉，只是這張表單當初選過。取消後就不會再出現。</summary>
         public bool RuleDeleted { get; set; }
 
-        public string Display => RuleDeleted ? $"{Name}（規則已刪除）" : Name;
+        /// <summary>目前的機種不能用，只是這張表單已經選了。取消後就不會再出現。</summary>
+        public bool NotAvailable { get; set; }
+
+        public string Display => RuleDeleted ? $"{Name}（規則已刪除）"
+            : NotAvailable ? $"{Name}（這個機種不適用）"
+            : Name;
+    }
+
+    /// <summary>機種下拉選單的一個選項；Value 空白是「未指定」。</summary>
+    public class MachineTypeOption
+    {
+        public string Value { get; set; } = "";
+        public string Display => Value.Length == 0 ? "（未指定）" : Value;
+    }
+
+    /// <summary>規則頁「適用機種」的一個按鈕。</summary>
+    public class RuleTypeChip
+    {
+        public string Name { get; set; } = "";
+        public bool IsSelected { get; set; }
     }
 
     /// <summary>物料表單上的一列：這項料要不要由這個功能帶出、帶幾個。</summary>

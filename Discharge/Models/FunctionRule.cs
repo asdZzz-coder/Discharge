@@ -7,10 +7,18 @@ namespace Discharge.Models
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string Name { get; set; } = "";
+
+        /// <summary>哪些機種能用這個功能；空的表示所有機種都能用。</summary>
+        public List<string> MachineTypes { get; set; } = new();
+
         public List<RuleItem> Items { get; set; } = new();
 
         [JsonIgnore]
         public int ItemCount => Items.Count;
+
+        /// <summary>清單上顯示的適用機種。</summary>
+        [JsonIgnore]
+        public string MachineTypeText => MachineTypes.Count == 0 ? "所有機種" : string.Join("、", MachineTypes);
     }
 
     /// <summary>規則帶出的一項料。用料號對應物料資料庫（資料庫改料號時會一起改）。</summary>

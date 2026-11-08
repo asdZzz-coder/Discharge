@@ -80,6 +80,7 @@ namespace Discharge
             FormToMachine();
             foreach (var rule in _data.Rules) FunctionRules.RenameFunction(new[] { _draft }, rule.Id, rule.Name);
             ItemGrid.Items.Refresh();
+            RebuildMachineTypes();
             RebuildFunctionChips();
             UpdateCounts();
         }
@@ -187,20 +188,78 @@ namespace Discharge
                 ? "填好工令和機台名稱，選工單上的功能帶出料，最後按「儲存」。"
                 : $"建立於 {m.CreatedAt:yyyy/MM/dd HH:mm}　·　最後儲存 {m.UpdatedAt:yyyy/MM/dd HH:mm}";
             DeleteMachineButton.Visibility = m != null ? Visibility.Visible : Visibility.Collapsed;
+            RebuildMachineTypes();
             RebuildFunctionChips();
             _savedSnapshot = Snapshot();
             UpdateCounts();
         }
 
+        // ---------- 機種：決定工單功能能選哪些 ----------
+
+        private void RebuildMachineTypes()
+        {
+            var types = FunctionRules.AllMachineTypes(_data.Rules, _data.Machines);
+            if (_draft.MachineType.Length > 0 && !types.Any(t => FunctionRules.SameName(t, _draft.MachineType)))
+                types.Add(_draft.MachineType);
+            var options = new[] { new MachineTypeOption() }.Concat(types.Select(t => new MachineTypeOption { Value = t })).ToList();
+
+            _suppressSelection = true;
+            MachineTypeList.ItemsSource = options;
+            MachineTypeList.SelectedItem = options.FirstOrDefault(o => FunctionRules.SameName(o.Value, _draft.MachineType)) ?? options[0];
+            _suppressSelection = false;
+            MachineTypeHint.Visibility = types.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            MachineTypeText.Text = _draft.MachineType.Length == 0 ? "選擇機種…" : _draft.MachineType;
+            MachineTypeText.Foreground = (System.Windows.Media.Brush)FindResource(_draft.MachineType.Length == 0 ? "SubtleBrush" : "TextBrush");
+        }
+
+        private void MachineTypeList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_suppressSelection || MachineTypeList.SelectedItem is not MachineTypeOption option) return;
+            MachineTypeDropdown.IsChecked = false;
+            if (option.Value == _draft.MachineType) return;
+
+            _draft.MachineType = option.Value;
+            RebuildMachineTypes();
+            RebuildFunctionChips();
+            var unavailable = _draft.Functions.Count(f => _data.Rules.FirstOrDefault(r => r.Id == f.RuleId) is { } rule
+                && !FunctionRules.IsAvailable(rule, _draft.MachineType));
+            MessageText.Text = unavailable > 0
+                ? $"機種改成「{option.Display}」。已選的功能有 {unavailable} 個這個機種不適用，需要的話到工單功能取消（記得儲存）"
+                : $"機種改成「{option.Display}」（記得儲存）";
+            UpdateCounts();
+        }
+
+        /// <summary>
+        /// 下拉選單打開時，下面的按鈕暫時點不到：在選單外點按鈕關閉選單時，
+        /// 不會又被同一下點擊打開。
+        /// </summary>
+        private void DropdownPopup_Opened(object? sender, EventArgs e)
+        {
+            if (sender is Popup { PlacementTarget: UIElement target }) target.IsHitTestVisible = false;
+        }
+
+        private void DropdownPopup_Closed(object? sender, EventArgs e)
+        {
+            if (sender is Popup { PlacementTarget: UIElement target })
+                Dispatcher.BeginInvoke(() => target.IsHitTestVisible = true);
+        }
+
         // ---------- 工單功能：選了就帶出料 ----------
 
+        /// <summary>只列出這個機種能用的功能；已經選了但不適用、或規則刪掉的，也列出來才取消得掉。</summary>
         private void RebuildFunctionChips()
         {
             var chips = _data.Rules
+                .Where(r => FunctionRules.IsAvailable(r, _draft.MachineType) || _draft.Functions.Any(f => f.RuleId == r.Id))
                 .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(r => new FunctionChip { RuleId = r.Id, Name = r.Name, IsSelected = _draft.Functions.Any(f => f.RuleId == r.Id) })
+                .Select(r => new FunctionChip
+                {
+                    RuleId = r.Id,
+                    Name = r.Name,
+                    IsSelected = _draft.Functions.Any(f => f.RuleId == r.Id),
+                    NotAvailable = !FunctionRules.IsAvailable(r, _draft.MachineType),
+                })
                 .ToList();
-            // 規則刪掉了，但這張表單當初選過：留著才取消得掉
             chips.AddRange(_draft.Functions
                 .Where(f => _data.Rules.All(r => r.Id != f.RuleId))
                 .Select(f => new FunctionChip { RuleId = f.RuleId, Name = f.Name, IsSelected = true, RuleDeleted = true }));
@@ -216,9 +275,16 @@ namespace Discharge
         private void UpdateFunctionHeader()
         {
             FunctionCountText.Text = $"已選 {_draft.Functions.Count} 個";
-            FunctionEmptyText.Text = _data.Rules.Count == 0 && _draft.Functions.Count == 0
-                ? "還沒有功能規則，按右邊的「管理規則」新增。"
-                : _chipView?.Count == 0 ? "找不到符合的功能" : "";
+            FunctionSummaryText.Text = _draft.Functions.Count == 0 ? "選擇工單上的功能…" : string.Join("、", _draft.Functions.Select(f => f.Name));
+            FunctionSummaryText.Foreground = (System.Windows.Media.Brush)FindResource(_draft.Functions.Count == 0 ? "SubtleBrush" : "TextBrush");
+
+            var hasRules = _data.Rules.Count > 0;
+            var anyListed = _chipView is { IsEmpty: false } || _draft.Functions.Count > 0;
+            FunctionEmptyText.Text = !hasRules && _draft.Functions.Count == 0 ? "還沒有功能規則，按「管理規則」新增。"
+                : _chipView?.Count == 0 && !string.IsNullOrWhiteSpace(FunctionFilterBox.Text) ? "找不到符合的功能"
+                : !anyListed && _draft.MachineType.Length == 0 ? "先選機種，才會列出這個機種能用的功能。"
+                : !anyListed ? $"「{_draft.MachineType}」沒有能用的功能，到「功能規則」設定適用機種。"
+                : "";
             FunctionEmptyText.Visibility = FunctionEmptyText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -251,7 +317,7 @@ namespace Discharge
             {
                 var removed = FunctionRules.RemoveFunction(_draftItems, _draft.Functions, chip.RuleId);
                 MessageText.Text = $"取消「{chip.Name}」，移除 {removed} 項料（記得儲存）";
-                if (chip.RuleDeleted) Dispatcher.InvokeAsync(RebuildFunctionChips);
+                if (chip.RuleDeleted || chip.NotAvailable) Dispatcher.InvokeAsync(RebuildFunctionChips);
             }
 
             ItemGrid.Items.Refresh();
@@ -483,7 +549,7 @@ namespace Discharge
                 .Select(r => new MaterialRuleRow
                 {
                     RuleId = r.Id,
-                    Name = r.Name,
+                    Name = r.MachineTypes.Count == 0 ? r.Name : $"{r.Name}（{r.MachineTypeText}）",
                     IsChecked = current.ContainsKey(r.Id),
                     QuantityText = current.TryGetValue(r.Id, out var q) ? q.ToString("0.##########", CultureInfo.InvariantCulture) : "1",
                 })

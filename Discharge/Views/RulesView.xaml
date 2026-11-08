@@ -40,7 +40,11 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding MachineTypeText}" FontSize="12.5" Margin="0,2,0,0"
+                                                   Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
                                     <Border Grid.Column="1" Style="{StaticResource Chip}" Margin="8,0,0,0">
                                         <TextBlock Text="{Binding ItemCount, StringFormat={}{0} 項}" Style="{StaticResource ChipText}" />
                                     </Border>
@@ -81,9 +85,46 @@
                     </Button>
                 </Grid>
 
-                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,20">
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
                     <TextBlock Text="功能名稱 *" Style="{StaticResource FieldLabel}" />
                     <TextBox x:Name="RuleNameBox" TextChanged="RuleName_TextChanged" />
+                </StackPanel>
+
+                <!-- 適用機種：機台表單選了這些機種才會列出這個功能 -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,18">
+                    <TextBlock Text="適用機種（都不選＝所有機種都能用）" Style="{StaticResource FieldLabel}" />
+                    <ScrollViewer MaxHeight="84" VerticalScrollBarVisibility="Auto" Focusable="False">
+                        <ItemsControl x:Name="RuleTypeChips">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <ToggleButton Style="{StaticResource FunctionToggle}" Content="{Binding Name}"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                  Checked="RuleType_Toggled" Unchecked="RuleType_Toggled" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <Grid Margin="0,2,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="240" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="NewTypeBox" KeyDown="NewTypeBox_KeyDown" ToolTip="輸入新的機種名稱，按 Enter 或「加入機種」" />
+                        <Button Grid.Column="1" x:Name="AddTypeButton" Click="AddType_Click" Margin="8,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
+                                <TextBlock Text="加入機種" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Grid.Column="2" Style="{StaticResource HintText}" Margin="12,0,0,0"
+                                   Text="新的機種在這裡打名稱加入；上面點一下可以選或取消。" />
+                    </Grid>
                 </StackPanel>
 
                 <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0">

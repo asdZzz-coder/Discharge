@@ -335,6 +335,43 @@ namespace Discharge.Tests
         }
 
         [Fact]
+        public void ExportThenImport_KeepsMachineTypes()
+        {
+            var data = SampleWithRules();
+            data.Rules[0].MachineTypes.AddRange(new[] { "A型", "B型" });
+            data.Rules[2].MachineTypes.Add("C型"); // 沒有料的規則也要保留機種
+            data.Machines[0].MachineType = "A型";
+            var path = PathOf("a.xlsx");
+            ExcelService.Export(data, path);
+
+            var file = ExcelService.Read(path);
+            Assert.True(file.HasMachineType && file.HasRuleTypes);
+            var target = new AppData();
+            ExcelService.Apply(target, file, ImportMode.Merge);
+
+            Assert.Equal(new[] { "A型", "B型" }, target.Rules.Single(r => r.Name == "正逆轉").MachineTypes);
+            Assert.Empty(target.Rules.Single(r => r.Name == "變頻").MachineTypes);
+            Assert.Equal("C型", target.Rules.Single(r => r.Name == "還沒設定料").MachineTypes.Single());
+            Assert.Equal("A型", target.Machines.Single().MachineType);
+        }
+
+        [Fact]
+        public void Import_WithoutTypeColumns_KeepsExistingTypes()
+        {
+            var path = MakeWorkbook(
+                (ExcelService.RuleSheet, new[] { new object[] { "功能", "料號", "數量" }, new object[] { "A", "X", 1d } }),
+                (ExcelService.MachineSheet, new[] { new object[] { "工令", "機台名稱" }, new object[] { "W001", "M" } }));
+            var rule = new FunctionRule { Name = "A", MachineTypes = { "舊機種" } };
+            var machine = new Machine { WorkOrder = "W001", Name = "M", MachineType = "舊機種" };
+            var target = new AppData { Rules = { rule }, Machines = { machine } };
+
+            ExcelService.Apply(target, ExcelService.Read(path), ImportMode.Merge);
+
+            Assert.Equal("舊機種", rule.MachineTypes.Single());
+            Assert.Equal("舊機種", machine.MachineType);
+        }
+
+        [Fact]
         public void Merge_SameRuleName_KeepsIdAndReplacesItems_OtherRulesStay()
         {
             var path = MakeWorkbook((ExcelService.RuleSheet, new[]

@@ -8,6 +8,10 @@ namespace Discharge.Models
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string WorkOrder { get; set; } = "";
         public string Name { get; set; } = "";
+
+        /// <summary>機種：決定工單功能能選哪些規則。舊資料是空的。</summary>
+        public string MachineType { get; set; } = "";
+
         public List<MachineFunction> Functions { get; set; } = new();
         public List<MachineItem> Items { get; set; } = new();
         public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -15,6 +19,10 @@ namespace Discharge.Models
 
         [JsonIgnore]
         public int ItemCount => Items.Count;
+
+        /// <summary>機台清單上的第二行：機種 · 機台名稱。</summary>
+        [JsonIgnore]
+        public string Subtitle => MachineType.Length == 0 ? Name : $"{MachineType} · {Name}";
     }
 
     /// <summary>

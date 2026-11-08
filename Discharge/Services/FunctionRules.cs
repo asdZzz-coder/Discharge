@@ -17,13 +17,40 @@ namespace Discharge.Services
             if (rule.Name.Length == 0) return "請輸入功能名稱。";
             if (rule.Name.IndexOfAny(ReservedChars) >= 0) return "功能名稱不能有「、」或「×」。";
             if (all.Any(r => r.Id != rule.Id && SameName(r.Name, rule.Name))) return $"已經有「{rule.Name}」這條規則了。";
+            if (rule.MachineTypes.FirstOrDefault(t => ValidateMachineType(t) != null) is { } badType) return ValidateMachineType(badType);
             var bad = rule.Items.FirstOrDefault(i => i.Quantity <= 0);
             return bad == null ? null : $"料號 {bad.PartNo} 的數量要大於 0。";
         }
 
-        /// <summary>搜尋功能名稱和規則上的料號。</summary>
+        /// <summary>機種名稱：不能空白，也不能有「、」（Excel 用它分隔）。可以用就回傳 null。</summary>
+        public static string? ValidateMachineType(string type)
+        {
+            if (type.Trim().Length == 0) return "請輸入機種名稱。";
+            return type.Contains('、') ? "機種名稱不能有「、」。" : null;
+        }
+
+        /// <summary>搜尋功能名稱、適用機種和規則上的料號。</summary>
         public static bool Matches(FunctionRule rule, string? query) =>
-            TextRules.Matches(query, new[] { rule.Name }.Concat(rule.Items.Select(i => i.PartNo)).ToArray());
+            TextRules.Matches(query, new[] { rule.Name }.Concat(rule.MachineTypes).Concat(rule.Items.Select(i => i.PartNo)).ToArray());
+
+        // ---------- 機種 ----------
+
+        /// <summary>
+        /// 這個機種能不能用這條規則：規則沒設機種的所有機種都能用；
+        /// 機台還沒選機種時，只能用沒設機種的規則。
+        /// </summary>
+        public static bool IsAvailable(FunctionRule rule, string machineType) =>
+            rule.MachineTypes.Count == 0
+            || machineType.Trim().Length > 0 && rule.MachineTypes.Any(t => SameName(t, machineType));
+
+        /// <summary>目前用到的所有機種（規則上設的、機台表單上選的），依名稱排序。</summary>
+        public static List<string> AllMachineTypes(IEnumerable<FunctionRule> rules, IEnumerable<Machine> machines)
+        {
+            var types = new List<string>();
+            foreach (var type in rules.SelectMany(r => r.MachineTypes).Concat(machines.Select(m => m.MachineType)))
+                if (type.Trim().Length > 0 && !types.Any(t => SameName(t, type))) types.Add(type.Trim());
+            return types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+        }
 
         // ---------- 工單選功能 ----------
 

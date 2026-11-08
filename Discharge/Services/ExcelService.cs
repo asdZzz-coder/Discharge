@@ -26,6 +26,12 @@ namespace Discharge.Services
         /// <summary>「機台」工作表有「功能」欄。舊版匯出的檔案沒有，既有機台選的功能不動。</summary>
         public bool HasFunctions { get; set; }
 
+        /// <summary>「機台」工作表有「機種」欄。舊版匯出的檔案沒有，既有機台的機種不動。</summary>
+        public bool HasMachineType { get; set; }
+
+        /// <summary>「功能規則」工作表有「適用機種」欄。舊版匯出的檔案沒有，既有規則的機種不動。</summary>
+        public bool HasRuleTypes { get; set; }
+
         /// <summary>檔案裡工令和機台名稱重複、被併成一張的表單數。</summary>
         public int MergedForms { get; set; }
 
@@ -62,6 +68,8 @@ namespace Discharge.Services
         private const string HUpdated = "最後儲存";
         private const string HFunction = "功能";
         private const string HSources = "來源功能";
+        private const string HMachineType = "機種";
+        private const string HRuleTypes = "適用機種";
 
         private const char ListSeparator = '、';
         private const char QuantitySeparator = '×';
@@ -92,7 +100,7 @@ namespace Discharge.Services
                 .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var machines = StartSheet(wb, MachineSheet, HWorkOrder, HMachineName, HCreated, HUpdated, HFunction);
+            var machines = StartSheet(wb, MachineSheet, HWorkOrder, HMachineName, HCreated, HUpdated, HFunction, HMachineType);
             AsText(machines, 1);
             row = 2;
             foreach (var m in ordered)
@@ -102,6 +110,7 @@ namespace Discharge.Services
                 machines.Cell(row, 3).Value = m.CreatedAt;
                 machines.Cell(row, 4).Value = m.UpdatedAt;
                 machines.Cell(row, 5).Value = string.Join(ListSeparator, m.Functions.Select(f => f.Name));
+                machines.Cell(row, 6).Value = m.MachineType;
                 machines.Range(row, 3, row, 4).Style.DateFormat.Format = DateFormat;
                 row++;
             }
@@ -126,14 +135,15 @@ namespace Discharge.Services
                 }
             }
 
-            var rules = StartSheet(wb, RuleSheet, HFunction, HPartNo, HQuantity);
+            var rules = StartSheet(wb, RuleSheet, HFunction, HPartNo, HQuantity, HRuleTypes);
             AsText(rules, 2);
             row = 2;
             foreach (var rule in data.Rules.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
             {
                 if (rule.Items.Count == 0)
                 {
-                    rules.Cell(row++, 1).Value = rule.Name; // 還沒設定料的規則也要留著
+                    rules.Cell(row, 1).Value = rule.Name; // 還沒設定料的規則也要留著
+                    rules.Cell(row++, 4).Value = string.Join(ListSeparator, rule.MachineTypes);
                     continue;
                 }
                 foreach (var item in rule.Items)
@@ -141,6 +151,7 @@ namespace Discharge.Services
                     rules.Cell(row, 1).Value = rule.Name;
                     rules.Cell(row, 2).Value = item.PartNo;
                     rules.Cell(row, 3).Value = item.Quantity;
+                    rules.Cell(row, 4).Value = string.Join(ListSeparator, rule.MachineTypes);
                     row++;
                 }
             }
@@ -200,6 +211,7 @@ namespace Discharge.Services
         {
             var columns = HeaderColumns(ws);
             if (!Require(ws, columns, result, HFunction, HPartNo, HQuantity)) return;
+            result.HasRuleTypes = columns.ContainsKey(HRuleTypes);
 
             var rules = new List<FunctionRule>();
             foreach (var row in ws.RowsUsed().Skip(1))
@@ -217,6 +229,8 @@ namespace Discharge.Services
                 }
                 var rule = rules.FirstOrDefault(r => FunctionRules.SameName(r.Name, name));
                 if (rule == null) rules.Add(rule = new FunctionRule { Name = name });
+                foreach (var type in Text(row, columns, HRuleTypes).Split(ListSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    if (!rule.MachineTypes.Any(t => FunctionRules.SameName(t, type))) rule.MachineTypes.Add(type);
                 if (partNo.Length == 0) continue; // 還沒設定料的規則
 
                 if (!TryQuantity(row.Cell(columns[HQuantity]), out var quantity) || quantity <= 0)
@@ -268,6 +282,7 @@ namespace Discharge.Services
                 var columns = HeaderColumns(machineSheet);
                 if (!Require(machineSheet, columns, result, HWorkOrder, HMachineName)) return;
                 result.HasFunctions = columns.ContainsKey(HFunction);
+                result.HasMachineType = columns.ContainsKey(HMachineType);
                 foreach (var row in machineSheet.RowsUsed().Skip(1))
                 {
                     var workOrder = Text(row, columns, HWorkOrder);
@@ -286,6 +301,7 @@ namespace Discharge.Services
                     var machine = new Machine { WorkOrder = workOrder, Name = name };
                     if (Date(row, columns, HCreated) is { } created) machine.CreatedAt = created;
                     if (Date(row, columns, HUpdated) is { } updated) machine.UpdatedAt = updated;
+                    machine.MachineType = Text(row, columns, HMachineType);
                     foreach (var function in Text(row, columns, HFunction).Split(ListSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         machine.Functions.Add(new MachineFunction { Name = function });
                     forms[FormKey(workOrder, name)] = machine;
@@ -459,6 +475,7 @@ namespace Discharge.Services
                         rulesUpdated++;
                     }
                     rule.Items = imported.Items.Select(i => new RuleItem { PartNo = i.PartNo, Quantity = i.Quantity }).ToList();
+                    if (file.HasRuleTypes) rule.MachineTypes = imported.MachineTypes.ToList();
                     touchedRules.Add(rule);
                 }
                 if (mode == ImportMode.Replace) target.Rules.RemoveAll(r => !touchedRules.Contains(r));
@@ -493,6 +510,7 @@ namespace Discharge.Services
                     }
 
                     existing.UpdatedAt = imported.UpdatedAt;
+                    if (file.HasMachineType) existing.MachineType = imported.MachineType;
                     if (file.HasFunctions || file.HasItems && imported.Functions.Count > 0)
                         existing.Functions = imported.Functions.Select(f => new MachineFunction { RuleId = RuleIdOf(f.Name), Name = f.Name }).ToList();
                     if (file.HasItems)

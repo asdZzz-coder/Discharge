@@ -194,6 +194,56 @@ namespace Discharge.Tests
         }
 
         [Fact]
+        public void IsAvailable_RuleWithoutTypes_IsForEveryMachine_TypedRuleOnlyForItsTypes()
+        {
+            var common = Rule("通用");
+            var typed = Rule("正逆轉");
+            typed.MachineTypes.AddRange(new[] { "A型", "B型" });
+
+            Assert.True(FunctionRules.IsAvailable(common, ""));
+            Assert.True(FunctionRules.IsAvailable(common, "C型"));
+            Assert.True(FunctionRules.IsAvailable(typed, "a型"));   // 不分大小寫
+            Assert.True(FunctionRules.IsAvailable(typed, " B型 "));
+            Assert.False(FunctionRules.IsAvailable(typed, "C型"));
+            Assert.False(FunctionRules.IsAvailable(typed, ""));     // 還沒選機種只看得到通用的
+        }
+
+        [Fact]
+        public void AllMachineTypes_FromRulesAndMachines_DistinctAndSorted()
+        {
+            var rules = new[] { Rule("X"), Rule("Y") };
+            rules[0].MachineTypes.AddRange(new[] { "B型", "A型" });
+            rules[1].MachineTypes.Add("a型");
+            var machines = new[] { new Machine { MachineType = "C型" }, new Machine { MachineType = "" } };
+
+            Assert.Equal(new[] { "A型", "B型", "C型" }, FunctionRules.AllMachineTypes(rules, machines));
+        }
+
+        [Fact]
+        public void Validate_RejectsBadMachineTypeNames()
+        {
+            var rule = Rule("正逆轉");
+            rule.MachineTypes.Add("A、B");
+            Assert.NotNull(FunctionRules.Validate(rule, new[] { rule }));
+
+            rule.MachineTypes[0] = " ";
+            Assert.NotNull(FunctionRules.Validate(rule, new[] { rule }));
+
+            rule.MachineTypes[0] = "A型";
+            Assert.Null(FunctionRules.Validate(rule, new[] { rule }));
+        }
+
+        [Fact]
+        public void Matches_SearchesMachineTypes()
+        {
+            var rule = Rule("正逆轉");
+            rule.MachineTypes.Add("配電盤A型");
+
+            Assert.True(FunctionRules.Matches(rule, "a型"));
+            Assert.True(MachineRules.Matches(new Machine { MachineType = "配電盤A型" }, "A型"));
+        }
+
+        [Fact]
         public void ManyRules_AreSupported()
         {
             var rules = Enumerable.Range(1, 2000).Select(i => Rule($"功能{i}", ("T-01", 1))).ToList();

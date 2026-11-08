@@ -48,7 +48,12 @@ namespace Discharge.Services
                     m.Functions ??= new();
                     foreach (var item in m.Items) item.Sources ??= new();
                 }
-                foreach (var r in data.Rules) r.Items ??= new();
+                foreach (var r in data.Rules)
+                {
+                    r.Items ??= new();
+                    r.MachineTypes ??= new();
+                }
+                foreach (var m in data.Machines) m.MachineType ??= "";
                 return data;
             }
             catch (JsonException ex)

@@ -23,6 +23,7 @@ namespace Discharge.Views
         private FunctionRule? _editing;                // 正在編輯的規則；新增中為 null
         private string _draftId = Guid.NewGuid().ToString("N");
         private ObservableCollection<RuleItemRow> _rows = new();
+        private List<string> _draftTypes = new();
         private string _savedSnapshot = "";
         private bool _suppressSelection;
 
@@ -77,6 +78,9 @@ namespace Discharge.Views
             _editing = rule;
             _draftId = rule?.Id ?? Guid.NewGuid().ToString("N");
             RuleNameBox.Text = rule?.Name ?? "";
+            _draftTypes = rule?.MachineTypes.ToList() ?? new();
+            NewTypeBox.Text = "";
+            RebuildTypeChips();
             _rows = new ObservableCollection<RuleItemRow>((rule?.Items ?? new()).Select(ToRow));
             RuleItemGrid.ItemsSource = _rows;
             RuleTitle.Text = rule == null ? "新增規則" : rule.Name;
@@ -97,10 +101,59 @@ namespace Discharge.Views
             };
         }
 
+        /// <summary>列出所有機種（其他規則、機台表單用過的，加上這條規則新加的）。</summary>
+        private void RebuildTypeChips()
+        {
+            var types = FunctionRules.AllMachineTypes(_data.Rules, _data.Machines);
+            foreach (var type in _draftTypes)
+                if (!types.Any(t => FunctionRules.SameName(t, type))) types.Add(type);
+            RuleTypeChips.ItemsSource = types
+                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+                .Select(t => new RuleTypeChip { Name = t, IsSelected = _draftTypes.Any(d => FunctionRules.SameName(d, t)) })
+                .ToList();
+        }
+
+        /// <summary>按鈕顯示出來時也會收到 Checked，已經選了就不用再加。</summary>
+        private void RuleType_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.Primitives.ToggleButton { DataContext: RuleTypeChip chip } button) return;
+            var selected = button.IsChecked == true;
+            var existing = _draftTypes.FirstOrDefault(t => FunctionRules.SameName(t, chip.Name));
+            if (selected && existing == null) _draftTypes.Add(chip.Name);
+            else if (!selected && existing != null) _draftTypes.Remove(existing);
+            else return;
+            UpdateDirtyMark();
+        }
+
+        private void AddType_Click(object sender, RoutedEventArgs e)
+        {
+            var name = TextRules.Clean(NewTypeBox.Text);
+            if (FunctionRules.ValidateMachineType(name) is { } error)
+            {
+                MessageBox.Show(error, "加入機種", MessageBoxButton.OK, MessageBoxImage.Warning);
+                NewTypeBox.Focus();
+                return;
+            }
+            // 已經有的機種（不分大小寫）就直接選它
+            var known = FunctionRules.AllMachineTypes(_data.Rules, _data.Machines).FirstOrDefault(t => FunctionRules.SameName(t, name)) ?? name;
+            if (!_draftTypes.Any(t => FunctionRules.SameName(t, known))) _draftTypes.Add(known);
+            NewTypeBox.Text = "";
+            RebuildTypeChips();
+            UpdateDirtyMark();
+        }
+
+        private void NewTypeBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key != System.Windows.Input.Key.Enter) return;
+            AddType_Click(sender, e);
+            e.Handled = true;
+        }
+
         private FunctionRule FormToRule() => new()
         {
             Id = _draftId,
             Name = TextRules.Clean(RuleNameBox.Text),
+            MachineTypes = _draftTypes.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList(),
             Items = _rows.Select(r => new RuleItem { PartNo = r.PartNo, Quantity = r.Quantity }).ToList(),
         };
 
