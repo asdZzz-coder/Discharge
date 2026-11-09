@@ -233,6 +233,50 @@ namespace Discharge.Tests
         }
 
         [Fact]
+        public void CopyName_AddsSuffix_AndSkipsNamesInUse()
+        {
+            var rules = new List<FunctionRule> { Rule("正逆轉") };
+
+            Assert.Equal("正逆轉（複製）", FunctionRules.CopyName("正逆轉", rules));
+            rules.Add(Rule("正逆轉（複製）"));
+            Assert.Equal("正逆轉（複製 2）", FunctionRules.CopyName("正逆轉", rules));
+            rules.Add(Rule("正逆轉（複製 2）"));
+            Assert.Equal("正逆轉（複製 3）", FunctionRules.CopyName("正逆轉", rules));
+            Assert.Null(FunctionRules.Validate(Rule(FunctionRules.CopyName("正逆轉", rules)), rules));
+        }
+
+        [Fact]
+        public void FindSameItems_ComparesPartNosAndQuantities_IgnoringOrderAndCase()
+        {
+            var a = Rule("A", ("T-01", 2), ("MC-25", 1));
+            var sameOtherOrder = Rule("B", ("mc-25", 1), (" T-01 ", 2));
+            var otherQuantity = Rule("C", ("T-01", 3), ("MC-25", 1));
+            var fewer = Rule("D", ("T-01", 2));
+            var more = Rule("E", ("T-01", 2), ("MC-25", 1), ("NFB-100", 1));
+            var all = new[] { a, sameOtherOrder, otherQuantity, fewer, more };
+
+            Assert.Equal(new[] { "B" }, FunctionRules.FindSameItems(a, all).Select(r => r.Name));
+            Assert.Equal(new[] { "A" }, FunctionRules.FindSameItems(sameOtherOrder, all).Select(r => r.Name));
+            Assert.Empty(FunctionRules.FindSameItems(otherQuantity, all));
+            Assert.Empty(FunctionRules.FindSameItems(more, all));
+        }
+
+        [Fact]
+        public void FindSameItems_CopyIsReported_RulesWithoutItemsAreNot()
+        {
+            var original = Rule("正逆轉", ("T-01", 2));
+            original.MachineTypes.Add("A型");
+            var copy = Rule(FunctionRules.CopyName(original.Name, new[] { original }), ("T-01", 2));
+            copy.MachineTypes.Add("B型"); // 機種不同，料一樣還是算重複
+            var emptyA = Rule("空的A");
+            var emptyB = Rule("空的B");
+            var all = new[] { original, copy, emptyA, emptyB };
+
+            Assert.Equal("正逆轉", Assert.Single(FunctionRules.FindSameItems(copy, all)).Name);
+            Assert.Empty(FunctionRules.FindSameItems(emptyA, all));
+        }
+
+        [Fact]
         public void ManyRules_AreSupported()
         {
             var rules = Enumerable.Range(1, 2000).Select(i => Rule($"功能{i}", ("T-01", 1))).ToList();

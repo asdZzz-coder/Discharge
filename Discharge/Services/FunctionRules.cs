@@ -16,11 +16,43 @@ namespace Discharge.Services
         {
             if (rule.Name.Length == 0) return "請輸入功能名稱。";
             if (rule.Name.IndexOfAny(ReservedChars) >= 0) return "功能名稱不能有「、」或「×」。";
-            if (all.Any(r => r.Id != rule.Id && SameName(r.Name, rule.Name))) return $"已經有「{rule.Name}」這條規則了。";
+            if (all.Any(r => r.Id != rule.Id && SameName(r.Name, rule.Name))) return $"已經有「{rule.Name}」這條規則了，功能名稱不能重複，請改一個名稱。";
             if (rule.MachineTypes.FirstOrDefault(t => ValidateMachineType(t) != null) is { } badType) return ValidateMachineType(badType);
             var bad = rule.Items.FirstOrDefault(i => i.Quantity <= 0);
             return bad == null ? null : $"料號 {bad.PartNo} 的數量要大於 0。";
         }
+
+        // ---------- 複製、找重複 ----------
+
+        /// <summary>複製規則用的名稱：「原名（複製）」，已經有了就「原名（複製 2）」、「（複製 3）」…</summary>
+        public static string CopyName(string name, IEnumerable<FunctionRule> all)
+        {
+            var names = all.Select(r => r.Name).ToList();
+            var candidate = $"{name}（複製）";
+            for (var n = 2; names.Any(x => SameName(x, candidate)); n++) candidate = $"{name}（複製 {n}）";
+            return candidate;
+        }
+
+        /// <summary>兩條規則帶出的料一樣：料號相同（不分大小寫）、每個料號的數量也相同，順序不拘。</summary>
+        public static bool SameItems(FunctionRule a, FunctionRule b)
+        {
+            static Dictionary<string, decimal> Totals(FunctionRule rule)
+            {
+                var totals = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in rule.Items)
+                    totals[item.PartNo.Trim()] = totals.GetValueOrDefault(item.PartNo.Trim()) + item.Quantity;
+                return totals;
+            }
+            var x = Totals(a);
+            var y = Totals(b);
+            return x.Count == y.Count && x.All(p => y.TryGetValue(p.Key, out var q) && q == p.Value);
+        }
+
+        /// <summary>其他規則裡，帶出的料和這條完全一樣的（沒有料的不算）。</summary>
+        public static List<FunctionRule> FindSameItems(FunctionRule rule, IEnumerable<FunctionRule> all) =>
+            rule.Items.Count == 0 ? new()
+                : all.Where(r => r.Id != rule.Id && SameItems(r, rule))
+                     .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
         /// <summary>機種名稱：不能空白，也不能有「、」（Excel 用它分隔）。可以用就回傳 null。</summary>
         public static string? ValidateMachineType(string type)

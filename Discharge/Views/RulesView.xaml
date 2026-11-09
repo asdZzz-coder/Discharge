@@ -76,13 +76,21 @@
                         <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
                                    Text="機台表單選了這個功能，就會帶出下面的料。" />
                     </StackPanel>
-                    <Button Grid.Column="1" x:Name="DeleteRuleButton" Style="{StaticResource DangerButton}"
-                            Click="DeleteRule_Click" VerticalAlignment="Top">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE74D;" Style="{StaticResource ButtonIcon}" />
-                            <TextBlock Text="刪除規則" />
-                        </StackPanel>
-                    </Button>
+                    <StackPanel Grid.Column="1" x:Name="RuleActions" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button x:Name="CopyRuleButton" Click="CopyRule_Click" Margin="0,0,8,0"
+                                ToolTip="用這條規則的機種和料開一條新規則，改好名稱再儲存">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8C8;" Style="{StaticResource ButtonIcon}" />
+                                <TextBlock Text="複製規則" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="DeleteRuleButton" Style="{StaticResource DangerButton}" Click="DeleteRule_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" Style="{StaticResource ButtonIcon}" />
+                                <TextBlock Text="刪除規則" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">

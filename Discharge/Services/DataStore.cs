@@ -85,10 +85,15 @@ namespace Discharge.Services
         }
 
         /// <summary>匯入前備份目前的資料檔，回傳備份檔的路徑；還沒有資料檔就回傳 null。</summary>
-        public static string? BackupBeforeImport()
+        public static string? BackupBeforeImport() => Backup("import");
+
+        /// <summary>刪除全部資料前備份，回傳備份檔的路徑；還沒有資料檔就回傳 null。</summary>
+        public static string? BackupBeforeDeleteAll() => Backup("delete-all");
+
+        private static string? Backup(string reason)
         {
             if (!File.Exists(DataFile)) return null;
-            var backup = Path.Combine(DataDirectory, $"data.before-import-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+            var backup = Path.Combine(DataDirectory, $"data.before-{reason}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
             File.Copy(DataFile, backup, overwrite: true);
             return backup;
         }

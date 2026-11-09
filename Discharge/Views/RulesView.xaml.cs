@@ -74,19 +74,27 @@ namespace Discharge.Views
             UpdateDirtyMark();
         }
 
-        private void LoadRule(FunctionRule? rule)
+        /// <param name="rule">要編輯的規則；null 是新增。</param>
+        /// <param name="copyFrom">新增時先填入這條規則的內容（複製規則），算是還沒儲存的變更。</param>
+        private void LoadRule(FunctionRule? rule, FunctionRule? copyFrom = null)
         {
             _editing = rule;
             _draftId = rule?.Id ?? Guid.NewGuid().ToString("N");
-            RuleNameBox.Text = rule?.Name ?? "";
-            _draftTypes = rule?.MachineTypes.ToList() ?? new();
+            RuleNameBox.Text = "";
+            _draftTypes = new();
+            _rows = new ObservableCollection<RuleItemRow>();
+            _savedSnapshot = Snapshot(); // 新增時，空白的表單才算「沒有變更」
+
+            var source = rule ?? copyFrom;
+            RuleNameBox.Text = rule?.Name ?? (copyFrom == null ? "" : FunctionRules.CopyName(copyFrom.Name, _data.Rules));
+            _draftTypes = source?.MachineTypes.ToList() ?? new();
             TypeFilterBox.Text = "";
             RebuildTypeChips();
-            _rows = new ObservableCollection<RuleItemRow>((rule?.Items ?? new()).Select(ToRow));
+            _rows = new ObservableCollection<RuleItemRow>((source?.Items ?? new()).Select(ToRow));
             RuleItemGrid.ItemsSource = _rows;
-            RuleTitle.Text = rule == null ? "新增規則" : rule.Name;
-            DeleteRuleButton.Visibility = rule != null ? Visibility.Visible : Visibility.Collapsed;
-            _savedSnapshot = Snapshot();
+            RuleTitle.Text = rule?.Name ?? (copyFrom == null ? "新增規則" : $"複製「{copyFrom.Name}」");
+            RuleActions.Visibility = rule != null ? Visibility.Visible : Visibility.Collapsed;
+            if (rule != null) _savedSnapshot = Snapshot();
             UpdateCounts();
         }
 
@@ -237,8 +245,20 @@ namespace Discharge.Views
             if (error != null)
             {
                 MessageBox.Show(error, title, MessageBoxButton.OK, MessageBoxImage.Warning);
-                if (rule.Name.Length == 0 || error.Contains("名稱") || error.Contains("已經有")) RuleNameBox.Focus();
+                if (rule.Name.Length == 0 || error.Contains("名稱") || error.Contains("已經有")) FocusName();
                 return false;
+            }
+
+            // 帶出的料和別條一模一樣：提醒可能重複了，還是可以存（例如同樣的料，給不同機種用）
+            var same = FunctionRules.FindSameItems(rule, _data.Rules);
+            if (same.Count > 0)
+            {
+                var list = string.Join("\n", same.Take(10).Select(r =>
+                    $"・{r.Name}（{(r.MachineTypes.Count == 0 ? "所有機種" : string.Join("、", r.MachineTypes))}）"));
+                if (same.Count > 10) list += $"\n…還有 {same.Count - 10} 條";
+                if (MessageBox.Show($"這條規則帶出的料（{rule.Items.Count} 項，數量也一樣）和下面的規則完全相同，可能重複了：\n\n{list}\n\n還是要儲存嗎？",
+                        title, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return false;
             }
 
             var index = _editing == null ? -1 : _data.Rules.IndexOf(_editing);
@@ -301,6 +321,23 @@ namespace Discharge.Views
             SelectSilently(null);
             LoadRule(null);
             RuleNameBox.Focus();
+        }
+
+        private void FocusName()
+        {
+            RuleNameBox.Focus();
+            RuleNameBox.SelectAll();
+        }
+
+        /// <summary>複製目前的規則：開一條新規則，機種和料都一樣，名稱加上「（複製）」，改好再儲存。</summary>
+        private void CopyRule_Click(object sender, RoutedEventArgs e)
+        {
+            if (_editing == null || !ConfirmLeave()) return;
+            var source = _editing;
+            SelectSilently(null);
+            LoadRule(null, source);
+            FocusName();
+            _message($"已複製「{source.Name}」，改好名稱和內容再按「儲存」");
         }
 
         private void Save_Click(object sender, RoutedEventArgs e) => Save();

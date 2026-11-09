@@ -810,6 +810,48 @@ namespace Discharge
             MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
+        // ---------- 刪除全部資料 ----------
+
+        /// <summary>
+        /// 刪除全部的物料、機台表單、規則和機種。問兩次（預設都是「否」），
+        /// 刪除前把資料檔備份起來；沒存的變更直接丟掉。
+        /// </summary>
+        private void DeleteAll_Click(object sender, RoutedEventArgs e)
+        {
+            const string title = "刪除全部資料";
+            if (_data.Materials.Count == 0 && _data.Machines.Count == 0 && _data.Rules.Count == 0 && _data.MachineTypes.Count == 0)
+            {
+                MessageBox.Show("目前沒有資料可以刪除。", title);
+                return;
+            }
+
+            var counts = $"・物料 {_data.Materials.Count} 項\n・機台表單 {_data.Machines.Count} 張\n・功能規則 {_data.Rules.Count} 條\n・機種 {_data.MachineTypes.Count} 個";
+            if (MessageBox.Show($"確定要刪除全部資料嗎？\n\n{counts}\n\n還沒儲存的變更也會一起丟掉。刪除前會自動備份目前的資料檔。",
+                    title, MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                return;
+            if (MessageBox.Show("再確認一次：真的要刪除全部資料嗎？\n刪除後畫面上就沒有任何資料了，要找回來只能用備份檔。",
+                    title, MessageBoxButton.YesNo, MessageBoxImage.Stop, MessageBoxResult.No) != MessageBoxResult.Yes)
+                return;
+
+            string? backup;
+            try
+            {
+                backup = DataStore.BackupBeforeDeleteAll();
+                DataStore.Save(new AppData());
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show($"備份或存檔失敗，沒有刪除任何資料：{ex.Message}", title, MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            ReplaceData(new AppData());
+            MessageText.Text = "已刪除全部資料";
+            var message = "已刪除全部資料。";
+            if (backup != null) message += $"\n\n刪除前的資料備份在：\n{backup}\n\n要找回來，關閉程式後把這個檔案改名成 data.json 放回同一個資料夾。";
+            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
         /// <summary>換成新的資料，重新整理畫面；正在看的機台還在就留在那一台。</summary>
         private void ReplaceData(AppData next)
         {

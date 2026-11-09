@@ -13,7 +13,16 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <Button Grid.Column="1" x:Name="DeleteAllButton" Style="{StaticResource GhostButton}" Click="DeleteAll_Click"
+                    VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource DangerBrush}"
+                    ToolTip="刪除全部的物料、機台表單、功能規則和機種（刪除前會自動備份）">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE74D;" Style="{StaticResource ButtonIcon}" />
+                    <TextBlock Text="刪除全部" />
+                </StackPanel>
+            </Button>
             <StackPanel Orientation="Horizontal">
                 <Border Width="40" Height="40" CornerRadius="12" Background="{StaticResource AccentGradient}">
                     <TextBlock Text="&#xE7B8;" Style="{StaticResource Icon}" FontSize="19" Foreground="White"
@@ -24,21 +33,21 @@
                     <TextBlock Text="物料資料庫與機台出料表單" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
             </StackPanel>
-            <Button Grid.Column="1" x:Name="ImportButton" Style="{StaticResource GhostButton}" Click="Import_Click"
+            <Button Grid.Column="2" x:Name="ImportButton" Style="{StaticResource GhostButton}" Click="Import_Click"
                     VerticalAlignment="Center" ToolTip="從 Excel 匯入物料和機台表單">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE8B5;" Style="{StaticResource ButtonIcon}" />
                     <TextBlock Text="匯入" />
                 </StackPanel>
             </Button>
-            <Button Grid.Column="2" x:Name="ExportButton" Style="{StaticResource GhostButton}" Click="Export_Click"
+            <Button Grid.Column="3" x:Name="ExportButton" Style="{StaticResource GhostButton}" Click="Export_Click"
                     VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="把物料和機台表單匯出成 Excel">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xEDE1;" Style="{StaticResource ButtonIcon}" />
                     <TextBlock Text="匯出" />
                 </StackPanel>
             </Button>
-            <Border Grid.Column="3" Style="{StaticResource SegmentBar}" VerticalAlignment="Center">
+            <Border Grid.Column="4" Style="{StaticResource SegmentBar}" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                     <RadioButton x:Name="MachinesTabButton" Style="{StaticResource SegmentTab}" GroupName="Page" Tag="0" IsChecked="True" Checked="PageTab_Checked">
                         <StackPanel Orientation="Horizontal">
@@ -203,10 +212,10 @@
                                            Opened="DropdownPopup_Opened" Closed="DropdownPopup_Closed">
                                         <Border Style="{StaticResource PopupCard}" Padding="6">
                                             <StackPanel>
-                                                <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto">
-                                                    <ListBox x:Name="MachineTypeList" Style="{StaticResource SideList}" IsSynchronizedWithCurrentItem="False"
-                                                             DisplayMemberPath="Display" SelectionChanged="MachineTypeList_SelectionChanged" />
-                                                </ScrollViewer>
+                                                <!-- 不要再包一層 ScrollViewer：清單自己的捲動會吃掉滾輪，外層就捲不動 -->
+                                                <ListBox x:Name="MachineTypeList" Style="{StaticResource SideList}" IsSynchronizedWithCurrentItem="False"
+                                                         MaxHeight="280" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                         DisplayMemberPath="Display" SelectionChanged="MachineTypeList_SelectionChanged" />
                                                 <TextBlock x:Name="MachineTypeHint" Style="{StaticResource HintText}" Margin="8,6,8,4" MaxWidth="260"
                                                            TextWrapping="Wrap" Text="還沒有機種，到「機種」頁新增。" />
                                                 <Button Style="{StaticResource GhostButton}" Click="ManageTypes_Click" HorizontalAlignment="Right"
