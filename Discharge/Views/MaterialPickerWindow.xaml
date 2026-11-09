@@ -8,7 +8,8 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
             <TextBlock Text="從資料庫選料" Style="{StaticResource PageTitle}" />
             <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
-                       Text="勾選要出的料（可以多選），數量可以直接改。換搜尋條件時已經勾的會留著；選取好幾列後按空白鍵可以一次勾選或取消。" />
+                       Text="料號、名稱、規格可以同時篩選（空格分開可以打好幾個關鍵字）。勾選要出的料（可以多選），數量可以直接改。換篩選條件時已經勾的會留著；選取好幾列後按空白鍵可以一次勾選或取消。"
+                       TextWrapping="Wrap" />
         </StackPanel>
 
         <!-- 底部：已勾選數量、加入 / 取消 -->
@@ -35,6 +36,37 @@
 
         <Border Style="{StaticResource Card}" Padding="16">
             <DockPanel>
+                <!-- 分欄篩選：料號、名稱、規格各打各的，同時符合才列出 -->
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="料號" Style="{StaticResource FieldLabel}" />
+                        <TextBox x:Name="PartNoFilterBox" Style="{StaticResource SearchBox}" Tag="篩選料號…" TextChanged="Filter_Changed" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="名稱" Style="{StaticResource FieldLabel}" />
+                        <TextBox x:Name="NameFilterBox" Style="{StaticResource SearchBox}" Tag="篩選名稱…" TextChanged="Filter_Changed" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="規格" Style="{StaticResource FieldLabel}" />
+                        <TextBox x:Name="SpecFilterBox" Style="{StaticResource SearchBox}" Tag="篩選規格…" TextChanged="Filter_Changed" />
+                    </StackPanel>
+                    <Button Grid.Column="5" x:Name="ClearFilterButton" Style="{StaticResource GhostButton}" Click="ClearFilter_Click"
+                            VerticalAlignment="Bottom" Margin="10,0,0,0" IsEnabled="False">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE894;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="清除篩選" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
                 <!-- 搜尋與勾選工具 -->
                 <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
@@ -44,7 +76,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" TextChanged="Filter_Changed"
-                             Tag="搜尋料號、名稱、規格、備註（空格分開可以打好幾個關鍵字）" />
+                             Tag="搜尋全部欄位（含備註）" />
                     <Button Grid.Column="1" Style="{StaticResource GhostButton}" Click="SelectAll_Click" Margin="10,0,0,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE762;" Style="{StaticResource ButtonIcon}" />

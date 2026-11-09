@@ -20,6 +20,10 @@ namespace Discharge.Services
         public static bool Matches(Material m, string? query) =>
             TextRules.Matches(query, m.PartNo, m.Name, m.Spec, m.Note);
 
+        /// <summary>分欄篩選：料號、名稱、規格各自比對自己的欄位，空白的不限，全部符合才算。</summary>
+        public static bool MatchesFields(Material m, string? partNo, string? name, string? spec) =>
+            TextRules.Matches(partNo, m.PartNo) && TextRules.Matches(name, m.Name) && TextRules.Matches(spec, m.Spec);
+
         private static readonly string[][] HeaderNames =
         {
             new[] { "料號", "品號", "PartNo" },

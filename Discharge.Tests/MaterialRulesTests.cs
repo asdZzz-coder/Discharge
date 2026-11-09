@@ -35,6 +35,20 @@ namespace Discharge.Tests
         }
 
         [Fact]
+        public void MatchesFields_EachBoxOnlyLooksAtItsOwnColumn_AllMustMatch()
+        {
+            var m = new Material { PartNo = "NFB-100", Name = "無熔絲開關", Spec = "3P 100A", Note = "常用" };
+
+            Assert.True(MaterialRules.MatchesFields(m, "", null, " "));               // 空白的不限
+            Assert.True(MaterialRules.MatchesFields(m, "nfb", "開關", "100a"));       // 三欄同時符合
+            Assert.True(MaterialRules.MatchesFields(m, "", "", "3p 100A"));           // 一欄打好幾個關鍵字
+            Assert.False(MaterialRules.MatchesFields(m, "nfb", "開關", "200a"));      // 有一欄不符合就不列
+            Assert.False(MaterialRules.MatchesFields(m, "開關", "", ""));             // 料號欄不會找名稱
+            Assert.False(MaterialRules.MatchesFields(m, "", "100", ""));              // 名稱欄不會找料號
+            Assert.False(MaterialRules.MatchesFields(m, "", "", "常用"));             // 規格欄不會找備註
+        }
+
+        [Fact]
         public void ParseTable_WithHeader_FindsColumnsByName()
         {
             var text = "品名\t規格\t料號\r\n斷路器\t3P 100A\tA001\r\n\t\t\r\n端子\t\tA002\r\n";

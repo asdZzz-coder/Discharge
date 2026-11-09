@@ -40,11 +40,20 @@ namespace Discharge.Views
             {
                 Filter = o => o is PickRow r
                     && (OnlySelectedBox.IsChecked != true || r.Selected)
+                    && MaterialRules.MatchesFields(r.Material, PartNoFilterBox.Text, NameFilterBox.Text, SpecFilterBox.Text)
                     && MaterialRules.Matches(r.Material, SearchBox.Text),
             };
             RowsGrid.ItemsSource = _view;
             UpdateSummary();
-            Loaded += (_, _) => SearchBox.Focus();
+            Loaded += (_, _) => PartNoFilterBox.Focus();
+        }
+
+        private TextBox[] FilterBoxes => new[] { PartNoFilterBox, NameFilterBox, SpecFilterBox, SearchBox };
+
+        private void ClearFilter_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var box in FilterBoxes) box.Text = "";
+            PartNoFilterBox.Focus();
         }
 
         private void UpdateSummary()
@@ -54,6 +63,7 @@ namespace Discharge.Views
             SelectedCountText.Text = $"已勾選 {selected} 項";
             SummaryText.Text = $"顯示 {shown} / 共 {_rows.Count} 項";
             EmptyText.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
+            ClearFilterButton.IsEnabled = FilterBoxes.Any(b => b.Text.Trim().Length > 0);
             OkButton.IsEnabled = selected > 0;
         }
 
