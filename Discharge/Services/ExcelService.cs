@@ -20,6 +20,9 @@ namespace Discharge.Services
         public List<Machine>? Machines { get; set; }
         public List<FunctionRule>? Rules { get; set; }
 
+        /// <summary>「機種」工作表的機種清單。舊版匯出的檔案沒有這張工作表。</summary>
+        public List<string>? MachineTypes { get; set; }
+
         /// <summary>檔案有「出料明細」工作表。沒有的話，既有機台的料不動。</summary>
         public bool HasItems { get; set; }
 
@@ -38,16 +41,16 @@ namespace Discharge.Services
         /// <summary>讀不懂的列。有任何一筆就不匯入，免得只進來一半。</summary>
         public List<string> Errors { get; } = new();
 
-        public bool IsEmpty => Materials == null && Machines == null && Rules == null;
+        public bool IsEmpty => Materials == null && Machines == null && Rules == null && MachineTypes == null;
         public int ItemCount => Machines?.Sum(m => m.Items.Count) ?? 0;
     }
 
     public record ImportResult(int MaterialsAdded, int MaterialsUpdated, int MaterialsSkipped, int MachinesAdded, int MachinesUpdated,
-        int RulesAdded = 0, int RulesUpdated = 0);
+        int RulesAdded = 0, int RulesUpdated = 0, int TypesAdded = 0);
 
     /// <summary>
-    /// Excel 匯出 / 匯入。四張工作表：「物料資料庫」一列一項物料、「機台」一列一張表單、
-    /// 「出料明細」一列一項料，用工令和機台名稱對應回表單、「功能規則」一列一條規則上的一項料。
+    /// Excel 匯出 / 匯入。五張工作表：「物料資料庫」一列一項物料、「機台」一列一張表單、
+    /// 「出料明細」一列一項料，用工令和機台名稱對應回表單、「功能規則」一列一條規則上的一項料、「機種」一列一個機種。
     /// 匯入時依第一列的標題找欄位，順序可以調換。
     /// </summary>
     public static class ExcelService
@@ -56,6 +59,7 @@ namespace Discharge.Services
         public const string MachineSheet = "機台";
         public const string ItemSheet = "出料明細";
         public const string RuleSheet = "功能規則";
+        public const string TypeSheet = "機種";
 
         private const string HPartNo = "料號";
         private const string HName = "名稱";
@@ -156,6 +160,12 @@ namespace Discharge.Services
                 }
             }
 
+            var types = StartSheet(wb, TypeSheet, HMachineType);
+            AsText(types, 1);
+            row = 2;
+            foreach (var type in data.MachineTypes.OrderBy(t => t, StringComparer.OrdinalIgnoreCase))
+                types.Cell(row++, 1).Value = type;
+
             foreach (var ws in wb.Worksheets) FitColumns(ws);
             wb.SaveAs(path);
         }
@@ -193,7 +203,8 @@ namespace Discharge.Services
             wb.TryGetWorksheet(MachineSheet, out var machineSheet);
             wb.TryGetWorksheet(ItemSheet, out var itemSheet);
             wb.TryGetWorksheet(RuleSheet, out var ruleSheet);
-            if (!wb.TryGetWorksheet(MaterialSheet, out var materialSheet) && machineSheet == null && itemSheet == null && ruleSheet == null)
+            wb.TryGetWorksheet(TypeSheet, out var typeSheet);
+            if (!wb.TryGetWorksheet(MaterialSheet, out var materialSheet) && machineSheet == null && itemSheet == null && ruleSheet == null && typeSheet == null)
             {
                 // 不是這個程式匯出的檔案：第一張工作表有「料號」標題，就當成物料清單
                 var first = wb.Worksheets.FirstOrDefault();
@@ -204,7 +215,27 @@ namespace Discharge.Services
             if (materialSheet != null) ReadMaterials(materialSheet, result);
             if (machineSheet != null || itemSheet != null) ReadMachines(machineSheet, itemSheet, result);
             if (ruleSheet != null) ReadRules(ruleSheet, result);
+            if (typeSheet != null) ReadTypes(typeSheet, result);
             return result;
+        }
+
+        private static void ReadTypes(IXLWorksheet ws, ExcelImport result)
+        {
+            var columns = HeaderColumns(ws);
+            if (!Require(ws, columns, result, HMachineType)) return;
+            var types = new List<string>();
+            foreach (var row in ws.RowsUsed().Skip(1))
+            {
+                var name = Text(row, columns, HMachineType);
+                if (name.Length == 0) continue;
+                if (FunctionRules.ValidateMachineType(name) is { } error)
+                {
+                    result.Errors.Add($"「{ws.Name}」第 {row.RowNumber()} 列：{error}");
+                    continue;
+                }
+                if (!MachineTypeRules.Contains(types, name)) types.Add(name);
+            }
+            result.MachineTypes = types;
         }
 
         private static void ReadRules(IXLWorksheet ws, ExcelImport result)
@@ -529,7 +560,24 @@ namespace Discharge.Services
             foreach (var item in target.Machines.SelectMany(m => m.Items))
                 item.MaterialId = byPartNo.TryGetValue(item.PartNo.Trim(), out var material) ? material.Id : "";
 
-            return new ImportResult(materialsAdded, materialsUpdated, materialsSkipped, machinesAdded, machinesUpdated, rulesAdded, rulesUpdated);
+            // 機種清單：有「機種」工作表就照它（合併時加上去），規則用到的機種一定留著；
+            // 舊版檔案沒有這張工作表，就把檔案裡表單用到的機種加進清單
+            var typesBefore = target.MachineTypes.ToList();
+            if (file.MachineTypes != null)
+            {
+                if (mode == ImportMode.Replace) target.MachineTypes.Clear();
+                foreach (var type in file.MachineTypes)
+                    if (!MachineTypeRules.Contains(target.MachineTypes, type)) target.MachineTypes.Add(type);
+            }
+            else if (file.Machines != null && file.HasMachineType)
+            {
+                foreach (var type in file.Machines.Select(m => m.MachineType.Trim()).Where(t => t.Length > 0))
+                    if (!MachineTypeRules.Contains(target.MachineTypes, type)) target.MachineTypes.Add(type);
+            }
+            MachineTypeRules.Normalize(target, seedFromMachines: false);
+            var typesAdded = target.MachineTypes.Count(t => !MachineTypeRules.Contains(typesBefore, t));
+
+            return new ImportResult(materialsAdded, materialsUpdated, materialsSkipped, machinesAdded, machinesUpdated, rulesAdded, rulesUpdated, typesAdded);
         }
 
         private static MachineItem CopyItem(MachineItem i, Func<string, string> ruleIdOf) => new()

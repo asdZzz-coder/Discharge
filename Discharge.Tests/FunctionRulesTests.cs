@@ -209,17 +209,6 @@ namespace Discharge.Tests
         }
 
         [Fact]
-        public void AllMachineTypes_FromRulesAndMachines_DistinctAndSorted()
-        {
-            var rules = new[] { Rule("X"), Rule("Y") };
-            rules[0].MachineTypes.AddRange(new[] { "B型", "A型" });
-            rules[1].MachineTypes.Add("a型");
-            var machines = new[] { new Machine { MachineType = "C型" }, new Machine { MachineType = "" } };
-
-            Assert.Equal(new[] { "A型", "B型", "C型" }, FunctionRules.AllMachineTypes(rules, machines));
-        }
-
-        [Fact]
         public void Validate_RejectsBadMachineTypeNames()
         {
             var rule = Rule("正逆轉");

@@ -58,6 +58,12 @@
                             <TextBlock Text="功能規則" />
                         </StackPanel>
                     </RadioButton>
+                    <RadioButton x:Name="TypesTabButton" Style="{StaticResource SegmentTab}" GroupName="Page" Tag="3" Checked="PageTab_Checked">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8EC;" Style="{StaticResource ButtonIcon}" />
+                            <TextBlock Text="機種" />
+                        </StackPanel>
+                    </RadioButton>
                 </StackPanel>
             </Border>
         </Grid>
@@ -202,7 +208,9 @@
                                                              DisplayMemberPath="Display" SelectionChanged="MachineTypeList_SelectionChanged" />
                                                 </ScrollViewer>
                                                 <TextBlock x:Name="MachineTypeHint" Style="{StaticResource HintText}" Margin="8,6,8,4" MaxWidth="260"
-                                                           Text="機種在「功能規則」頁設定規則的適用機種時建立。" />
+                                                           TextWrapping="Wrap" Text="還沒有機種，到「機種」頁新增。" />
+                                                <Button Style="{StaticResource GhostButton}" Click="ManageTypes_Click" HorizontalAlignment="Right"
+                                                        Padding="8,2" FontSize="12" Margin="0,4,2,2" Content="管理機種" />
                                             </StackPanel>
                                         </Border>
                                     </Popup>
@@ -482,6 +490,11 @@
             <!-- ========== 功能規則 ========== -->
             <ContentControl x:Name="RulesPage" Focusable="False" IsTabStop="False" Visibility="Collapsed">
                 <views:RulesView x:Name="RulesEditor" />
+            </ContentControl>
+
+            <!-- ========== 機種 ========== -->
+            <ContentControl x:Name="TypesPage" Focusable="False" IsTabStop="False" Visibility="Collapsed">
+                <views:MachineTypesView x:Name="TypesEditor" />
             </ContentControl>
         </Grid>
     </DockPanel>

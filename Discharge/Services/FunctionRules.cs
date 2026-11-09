@@ -43,15 +43,6 @@ namespace Discharge.Services
             rule.MachineTypes.Count == 0
             || machineType.Trim().Length > 0 && rule.MachineTypes.Any(t => SameName(t, machineType));
 
-        /// <summary>目前用到的所有機種（規則上設的、機台表單上選的），依名稱排序。</summary>
-        public static List<string> AllMachineTypes(IEnumerable<FunctionRule> rules, IEnumerable<Machine> machines)
-        {
-            var types = new List<string>();
-            foreach (var type in rules.SelectMany(r => r.MachineTypes).Concat(machines.Select(m => m.MachineType)))
-                if (type.Trim().Length > 0 && !types.Any(t => SameName(t, type))) types.Add(type.Trim());
-            return types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
-        }
-
         // ---------- 工單選功能 ----------
 
         /// <summary>

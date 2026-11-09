@@ -27,6 +27,7 @@
     <Compile Include="..\Discharge\Services\MachineRules.cs" Link="Source\MachineRules.cs" />
     <Compile Include="..\Discharge\Services\ExcelService.cs" Link="Source\ExcelService.cs" />
     <Compile Include="..\Discharge\Services\FunctionRules.cs" Link="Source\FunctionRules.cs" />
+    <Compile Include="..\Discharge\Services\MachineTypeRules.cs" Link="Source\MachineTypeRules.cs" />
     <Compile Include="..\Discharge\Models\*.cs" LinkBase="Source\Models" />
   </ItemGroup>
 

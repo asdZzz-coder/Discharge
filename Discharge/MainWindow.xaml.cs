@@ -60,6 +60,8 @@ namespace Discharge
             FunctionRules.FillFunctionText(_data.Materials, _data.Rules);
 
             RulesEditor.Initialize(_data, Persist, text => MessageText.Text = text, OnRulesChanged);
+            RulesEditor.ManageTypesRequested += () => TypesTabButton.IsChecked = true;
+            TypesEditor.Initialize(_data, Persist, text => MessageText.Text = text, OnTypesChanged);
             LoadMachine(null);
             ClearMaterialForm();
             UpdateCounts();
@@ -80,6 +82,29 @@ namespace Discharge
             FormToMachine();
             foreach (var rule in _data.Rules) FunctionRules.RenameFunction(new[] { _draft }, rule.Id, rule.Name);
             ItemGrid.Items.Refresh();
+            RebuildMachineTypes();
+            RebuildFunctionChips();
+            UpdateCounts();
+        }
+
+        /// <summary>
+        /// 「機種」頁新增、改名、刪除後：規則頁的選單、機台表單的機種和工單功能跟著更新。
+        /// 改名時，正在編輯、還沒存的表單上的機種也一起改。
+        /// </summary>
+        private void OnTypesChanged(string? oldName, string? newName)
+        {
+            RulesEditor.Reload();
+            _machineView.Refresh();
+
+            CommitItemEdits();
+            if (Snapshot() == _savedSnapshot)
+            {
+                LoadMachine(_editing);
+                return;
+            }
+            FormToMachine();
+            if (oldName != null && newName != null && FunctionRules.SameName(_draft.MachineType, oldName))
+                _draft.MachineType = newName;
             RebuildMachineTypes();
             RebuildFunctionChips();
             UpdateCounts();
@@ -153,9 +178,17 @@ namespace Discharge
             MachinesPage.Visibility = page == "0" ? Visibility.Visible : Visibility.Collapsed;
             MaterialsPage.Visibility = page == "1" ? Visibility.Visible : Visibility.Collapsed;
             RulesPage.Visibility = page == "2" ? Visibility.Visible : Visibility.Collapsed;
+            TypesPage.Visibility = page == "3" ? Visibility.Visible : Visibility.Collapsed;
+            if (page == "3") TypesEditor.Reload(); // 規則、表單存過之後，用到的數量會變
         }
 
         private void ManageRules_Click(object sender, RoutedEventArgs e) => RulesTabButton.IsChecked = true;
+
+        private void ManageTypes_Click(object sender, RoutedEventArgs e)
+        {
+            MachineTypeDropdown.IsChecked = false;
+            TypesTabButton.IsChecked = true;
+        }
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
@@ -198,17 +231,19 @@ namespace Discharge
 
         private void RebuildMachineTypes()
         {
-            var types = FunctionRules.AllMachineTypes(_data.Rules, _data.Machines);
-            if (_draft.MachineType.Length > 0 && !types.Any(t => FunctionRules.SameName(t, _draft.MachineType)))
-                types.Add(_draft.MachineType);
-            var options = new[] { new MachineTypeOption() }.Concat(types.Select(t => new MachineTypeOption { Value = t })).ToList();
+            // 選項是「機種」頁的清單；表單選的機種後來被刪掉的，也列出來並標示
+            var options = new List<MachineTypeOption> { new() };
+            options.AddRange(_data.MachineTypes.Select(t => new MachineTypeOption { Value = t }));
+            var deleted = _draft.MachineType.Length > 0 && !MachineTypeRules.Contains(_data.MachineTypes, _draft.MachineType);
+            if (deleted) options.Add(new MachineTypeOption { Value = _draft.MachineType, Deleted = true });
 
             _suppressSelection = true;
             MachineTypeList.ItemsSource = options;
             MachineTypeList.SelectedItem = options.FirstOrDefault(o => FunctionRules.SameName(o.Value, _draft.MachineType)) ?? options[0];
             _suppressSelection = false;
-            MachineTypeHint.Visibility = types.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            MachineTypeText.Text = _draft.MachineType.Length == 0 ? "選擇機種…" : _draft.MachineType;
+            MachineTypeHint.Visibility = _data.MachineTypes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            MachineTypeText.Text = _draft.MachineType.Length == 0 ? "選擇機種…"
+                : deleted ? $"{_draft.MachineType}（已刪除的機種）" : _draft.MachineType;
             MachineTypeText.Foreground = (System.Windows.Media.Brush)FindResource(_draft.MachineType.Length == 0 ? "SubtleBrush" : "TextBrush");
         }
 
@@ -768,7 +803,7 @@ namespace Discharge
 
             ReplaceData(next);
 
-            var message = $"物料：新增 {result.MaterialsAdded} 項、更新 {result.MaterialsUpdated} 項\n機台：新增 {result.MachinesAdded} 台、更新 {result.MachinesUpdated} 台\n規則：新增 {result.RulesAdded} 條、更新 {result.RulesUpdated} 條";
+            var message = $"物料：新增 {result.MaterialsAdded} 項、更新 {result.MaterialsUpdated} 項\n機台：新增 {result.MachinesAdded} 台、更新 {result.MachinesUpdated} 台\n規則：新增 {result.RulesAdded} 條、更新 {result.RulesUpdated} 條\n機種：新增 {result.TypesAdded} 個";
             if (result.MaterialsSkipped > 0) message += $"\n有 {result.MaterialsSkipped} 項新物料沒有名稱，沒有加入。";
             if (backup != null) message += $"\n\n匯入前的資料備份在：\n{backup}";
             MessageText.Text = $"匯入完成：物料 {_data.Materials.Count} 項、機台 {_data.Machines.Count} 台、規則 {_data.Rules.Count} 條";
@@ -785,9 +820,12 @@ namespace Discharge
             _data.Machines.AddRange(next.Machines);
             _data.Rules.Clear();
             _data.Rules.AddRange(next.Rules);
+            _data.MachineTypes.Clear();
+            _data.MachineTypes.AddRange(next.MachineTypes);
             RefreshMaterials();
             _machineView.Refresh();
             RulesEditor.Reload();
+            TypesEditor.Reload();
             ClearMaterialForm();
 
             var current = _data.Machines.FirstOrDefault(m => m.Id == currentId);

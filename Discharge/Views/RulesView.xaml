@@ -90,41 +90,48 @@
                     <TextBox x:Name="RuleNameBox" TextChanged="RuleName_TextChanged" />
                 </StackPanel>
 
-                <!-- 適用機種：機台表單選了這些機種才會列出這個功能 -->
+                <!-- 適用機種：多選下拉選單，數量不限；機台表單選了這些機種才會列出這個功能 -->
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,18">
-                    <TextBlock Text="適用機種（都不選＝所有機種都能用）" Style="{StaticResource FieldLabel}" />
-                    <ScrollViewer MaxHeight="84" VerticalScrollBarVisibility="Auto" Focusable="False">
-                        <ItemsControl x:Name="RuleTypeChips">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <ToggleButton Style="{StaticResource FunctionToggle}" Content="{Binding Name}"
-                                                  IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                  Checked="RuleType_Toggled" Unchecked="RuleType_Toggled" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                    <Grid Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="240" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="NewTypeBox" KeyDown="NewTypeBox_KeyDown" ToolTip="輸入新的機種名稱，按 Enter 或「加入機種」" />
-                        <Button Grid.Column="1" x:Name="AddTypeButton" Click="AddType_Click" Margin="8,0,0,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE710;" Style="{StaticResource ButtonIcon}" FontSize="12" />
-                                <TextBlock Text="加入機種" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="適用機種" Style="{StaticResource FieldLabel}" />
+                        <TextBlock x:Name="RuleTypeCountText" Style="{StaticResource FieldLabel}" FontWeight="Normal" Margin="8,0,0,6" />
+                    </StackPanel>
+                    <ToggleButton x:Name="RuleTypeDropdown" Style="{StaticResource DropdownButton}"
+                                  ToolTip="機台表單選了這些機種，才會列出這個功能；都不選就是所有機種都能用">
+                        <TextBlock x:Name="RuleTypeSummaryText" TextTrimming="CharacterEllipsis" />
+                    </ToggleButton>
+                    <Popup x:Name="RuleTypePopup" StaysOpen="False" AllowsTransparency="True" Placement="Bottom"
+                           PlacementTarget="{Binding ElementName=RuleTypeDropdown}"
+                           IsOpen="{Binding IsChecked, ElementName=RuleTypeDropdown, Mode=TwoWay}"
+                           Width="{Binding ActualWidth, ElementName=RuleTypeDropdown}"
+                           Opened="RuleTypePopup_Opened" Closed="RuleTypePopup_Closed">
+                        <Border Style="{StaticResource PopupCard}">
+                            <StackPanel>
+                                <TextBox x:Name="TypeFilterBox" Style="{StaticResource SearchBox}" Tag="搜尋機種…" Margin="0,0,0,8"
+                                         TextChanged="TypeFilterBox_TextChanged" KeyDown="TypeFilterBox_KeyDown" />
+                                <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="RuleTypeChips">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Name}" Margin="6,6" FontSize="13.5"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          Checked="RuleType_Toggled" Unchecked="RuleType_Toggled" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                                <TextBlock x:Name="RuleTypeEmptyText" Style="{StaticResource HintText}" Margin="6,4" TextWrapping="Wrap" />
+                                <DockPanel Margin="6,8,0,0">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}"
+                                            Click="ManageTypes_Click" Padding="8,2" FontSize="12" Content="管理機種" />
+                                    <Button DockPanel.Dock="Right" x:Name="ClearTypesButton" Style="{StaticResource GhostButton}"
+                                            Click="ClearTypes_Click" Padding="8,2" FontSize="12" Content="全部取消" />
+                                    <TextBlock Style="{StaticResource HintText}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               Text="可以勾好幾個，數量不限；都不勾就是所有機種都能用。" />
+                                </DockPanel>
                             </StackPanel>
-                        </Button>
-                        <TextBlock Grid.Column="2" Style="{StaticResource HintText}" Margin="12,0,0,0"
-                                   Text="新的機種在這裡打名稱加入；上面點一下可以選或取消。" />
-                    </Grid>
+                        </Border>
+                    </Popup>
                 </StackPanel>
 
                 <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0">

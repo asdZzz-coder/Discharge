@@ -24,6 +24,7 @@ namespace Discharge.Views
         private string _draftId = Guid.NewGuid().ToString("N");
         private ObservableCollection<RuleItemRow> _rows = new();
         private List<string> _draftTypes = new();
+        private ListCollectionView? _typeView;
         private string _savedSnapshot = "";
         private bool _suppressSelection;
 
@@ -79,7 +80,7 @@ namespace Discharge.Views
             _draftId = rule?.Id ?? Guid.NewGuid().ToString("N");
             RuleNameBox.Text = rule?.Name ?? "";
             _draftTypes = rule?.MachineTypes.ToList() ?? new();
-            NewTypeBox.Text = "";
+            TypeFilterBox.Text = "";
             RebuildTypeChips();
             _rows = new ObservableCollection<RuleItemRow>((rule?.Items ?? new()).Select(ToRow));
             RuleItemGrid.ItemsSource = _rows;
@@ -101,52 +102,102 @@ namespace Discharge.Views
             };
         }
 
-        /// <summary>列出所有機種（其他規則、機台表單用過的，加上這條規則新加的）。</summary>
-        private void RebuildTypeChips()
+        // ---------- 適用機種：多選下拉選單，數量不限；機種在「機種」頁新增、刪除 ----------
+
+        /// <summary>按了選單裡的「管理機種」。</summary>
+        public event Action? ManageTypesRequested;
+
+        /// <summary>機種清單上的，加上這條規則勾了、清單卻沒有的（照理不會有，保險起見也列出來才取消得掉）。</summary>
+        private List<string> KnownTypes()
         {
-            var types = FunctionRules.AllMachineTypes(_data.Rules, _data.Machines);
+            var types = _data.MachineTypes.ToList();
             foreach (var type in _draftTypes)
-                if (!types.Any(t => FunctionRules.SameName(t, type))) types.Add(type);
-            RuleTypeChips.ItemsSource = types
-                .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
-                .Select(t => new RuleTypeChip { Name = t, IsSelected = _draftTypes.Any(d => FunctionRules.SameName(d, t)) })
-                .ToList();
+                if (!MachineTypeRules.Contains(types, type)) types.Add(type);
+            return types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        /// <summary>按鈕顯示出來時也會收到 Checked，已經選了就不用再加。</summary>
+        private void RebuildTypeChips()
+        {
+            var chips = KnownTypes()
+                .Select(t => new RuleTypeChip { Name = t, IsSelected = MachineTypeRules.Contains(_draftTypes, t) })
+                .ToList();
+            _typeView = new ListCollectionView(chips)
+            {
+                Filter = o => TextRules.Matches(TypeFilterBox.Text, ((RuleTypeChip)o).Name),
+            };
+            RuleTypeChips.ItemsSource = _typeView;
+            UpdateTypeHeader();
+        }
+
+        private void UpdateTypeHeader()
+        {
+            var selected = _draftTypes.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+            RuleTypeCountText.Text = selected.Count == 0 ? "（都不選＝所有機種都能用）" : $"已選 {selected.Count} 個";
+            RuleTypeSummaryText.Text = selected.Count == 0 ? "所有機種都能用" : string.Join("、", selected);
+            RuleTypeSummaryText.Foreground = (System.Windows.Media.Brush)FindResource(selected.Count == 0 ? "SubtleBrush" : "TextBrush");
+            ClearTypesButton.IsEnabled = selected.Count > 0;
+
+            RuleTypeEmptyText.Text = _typeView is not { IsEmpty: true } ? ""
+                : _data.MachineTypes.Count == 0 && _draftTypes.Count == 0 ? "還沒有機種，按「管理機種」到「機種」頁新增。"
+                : "找不到符合的機種";
+            RuleTypeEmptyText.Visibility = RuleTypeEmptyText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>勾選框顯示出來時也會收到 Checked，已經選了就不用再加。</summary>
         private void RuleType_Toggled(object sender, RoutedEventArgs e)
         {
-            if (sender is not System.Windows.Controls.Primitives.ToggleButton { DataContext: RuleTypeChip chip } button) return;
-            var selected = button.IsChecked == true;
-            var existing = _draftTypes.FirstOrDefault(t => FunctionRules.SameName(t, chip.Name));
+            if (sender is not CheckBox { DataContext: RuleTypeChip chip } box) return;
+            var selected = box.IsChecked == true;
+            var existing = MachineTypeRules.Find(_draftTypes, chip.Name);
             if (selected && existing == null) _draftTypes.Add(chip.Name);
             else if (!selected && existing != null) _draftTypes.Remove(existing);
             else return;
+            UpdateTypeHeader();
             UpdateDirtyMark();
         }
 
-        private void AddType_Click(object sender, RoutedEventArgs e)
+        private void ClearTypes_Click(object sender, RoutedEventArgs e)
         {
-            var name = TextRules.Clean(NewTypeBox.Text);
-            if (FunctionRules.ValidateMachineType(name) is { } error)
-            {
-                MessageBox.Show(error, "加入機種", MessageBoxButton.OK, MessageBoxImage.Warning);
-                NewTypeBox.Focus();
-                return;
-            }
-            // 已經有的機種（不分大小寫）就直接選它
-            var known = FunctionRules.AllMachineTypes(_data.Rules, _data.Machines).FirstOrDefault(t => FunctionRules.SameName(t, name)) ?? name;
-            if (!_draftTypes.Any(t => FunctionRules.SameName(t, known))) _draftTypes.Add(known);
-            NewTypeBox.Text = "";
+            if (_draftTypes.Count == 0) return;
+            _draftTypes.Clear();
             RebuildTypeChips();
             UpdateDirtyMark();
         }
 
-        private void NewTypeBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        private void ManageTypes_Click(object sender, RoutedEventArgs e)
         {
-            if (e.Key != System.Windows.Input.Key.Enter) return;
-            AddType_Click(sender, e);
+            RuleTypeDropdown.IsChecked = false;
+            ManageTypesRequested?.Invoke();
+        }
+
+        private void TypeFilterBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_typeView == null) return; // LoadRule 完成前
+            _typeView.Refresh();
+            UpdateTypeHeader();
+        }
+
+        private void TypeFilterBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key != System.Windows.Input.Key.Escape) return;
+            RuleTypeDropdown.IsChecked = false;
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// 選單打開時，下面的按鈕暫時點不到（在選單外點按鈕關閉時，不會又被同一下點擊打開），
+        /// 並把游標放進搜尋框，直接就能打字。
+        /// </summary>
+        private void RuleTypePopup_Opened(object? sender, EventArgs e)
+        {
+            RuleTypeDropdown.IsHitTestVisible = false;
+            Dispatcher.BeginInvoke(() => TypeFilterBox.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+        }
+
+        private void RuleTypePopup_Closed(object? sender, EventArgs e)
+        {
+            TypeFilterBox.Text = "";
+            Dispatcher.BeginInvoke(() => RuleTypeDropdown.IsHitTestVisible = true);
         }
 
         private FunctionRule FormToRule() => new()

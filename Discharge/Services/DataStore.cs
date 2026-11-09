@@ -38,10 +38,14 @@ namespace Discharge.Services
             if (!File.Exists(file)) return new AppData();
             try
             {
-                var data = JsonSerializer.Deserialize<AppData>(File.ReadAllText(file), Options) ?? new AppData();
+                var json = File.ReadAllText(file);
+                var data = JsonSerializer.Deserialize<AppData>(json, Options) ?? new AppData();
                 data.Materials ??= new();
                 data.Machines ??= new();
                 data.Rules ??= new();
+                // 舊版（v1.0.4 以前）沒有機種清單，從規則和表單用過的機種建立
+                var hasTypeList = data.MachineTypes != null && HasProperty(json, nameof(AppData.MachineTypes));
+                data.MachineTypes ??= new();
                 foreach (var m in data.Machines)
                 {
                     m.Items ??= new();
@@ -54,12 +58,19 @@ namespace Discharge.Services
                     r.MachineTypes ??= new();
                 }
                 foreach (var m in data.Machines) m.MachineType ??= "";
+                MachineTypeRules.Normalize(data, seedFromMachines: !hasTypeList);
                 return data;
             }
             catch (JsonException ex)
             {
                 throw new InvalidDataException($"資料檔格式錯誤：{file}\n{ex.Message}", ex);
             }
+        }
+
+        private static bool HasProperty(string json, string name)
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty(name, out _);
         }
 
         public static void Save(AppData data) => Save(data, DataFile);

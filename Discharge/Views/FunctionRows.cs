@@ -24,10 +24,14 @@ namespace Discharge.Views
     public class MachineTypeOption
     {
         public string Value { get; set; } = "";
-        public string Display => Value.Length == 0 ? "（未指定）" : Value;
+
+        /// <summary>表單選的機種已經在「機種」頁刪掉了。</summary>
+        public bool Deleted { get; set; }
+
+        public string Display => Value.Length == 0 ? "（未指定）" : Deleted ? $"{Value}（已刪除的機種）" : Value;
     }
 
-    /// <summary>規則頁「適用機種」的一個按鈕。</summary>
+    /// <summary>規則頁「適用機種」下拉選單的一個選項。</summary>
     public class RuleTypeChip
     {
         public string Name { get; set; } = "";

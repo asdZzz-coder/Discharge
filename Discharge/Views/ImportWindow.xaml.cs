@@ -26,6 +26,7 @@ namespace Discharge.Views
             if (file.Machines != null) parts.Add($"機台 {file.Machines.Count} 台");
             if (file.HasItems) parts.Add($"出料明細 {file.ItemCount} 筆");
             if (file.Rules != null) parts.Add($"功能規則 {file.Rules.Count} 條");
+            if (file.MachineTypes != null) parts.Add($"機種 {file.MachineTypes.Count} 個");
             SummaryText.Text = string.Join("　·　", parts);
 
             var notices = new List<string>();
@@ -50,6 +51,7 @@ namespace Discharge.Views
             if (_file.Materials != null) parts.Add($"現有的 {_current.Materials.Count} 項物料");
             if (_file.Machines != null) parts.Add($"現有的 {_current.Machines.Count} 台機台");
             if (_file.Rules != null) parts.Add($"現有的 {_current.Rules.Count} 條規則");
+            if (_file.MachineTypes != null) parts.Add($"現有的 {_current.MachineTypes.Count} 個機種（規則用到的會留著）");
             return $"{string.Join("、", parts)}換成檔案的內容，檔案裡沒有的會被刪除。";
         }
 
