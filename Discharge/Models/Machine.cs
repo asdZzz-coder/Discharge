@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Discharge.Models
 {
-    /// <summary>一張機台表單：工令、機台名稱、選的功能，以及帶出來或另外選的料。</summary>
+    /// <summary>一張機台表單：工令、客戶名稱、選的功能，以及帶出來或另外選的料。</summary>
     public class Machine
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -20,7 +20,7 @@ namespace Discharge.Models
         [JsonIgnore]
         public int ItemCount => Items.Count;
 
-        /// <summary>機台清單上的第二行：機種 · 機台名稱。</summary>
+        /// <summary>機台清單上的第二行：機種 · 客戶名稱。</summary>
         [JsonIgnore]
         public string Subtitle => MachineType.Length == 0 ? Name : $"{MachineType} · {Name}";
     }

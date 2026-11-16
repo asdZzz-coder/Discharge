@@ -160,7 +160,7 @@ namespace Discharge.Tests
         {
             var path = MakeWorkbook((ExcelService.MachineSheet, new[]
             {
-                new object[] { "工令", "機台名稱" },
+                new object[] { "工令", "客戶名稱" },
                 new object[] { "W001", "配電盤" },
             }));
             var target = Sample();
@@ -175,7 +175,7 @@ namespace Discharge.Tests
         {
             var path = MakeWorkbook((ExcelService.ItemSheet, new[]
             {
-                new object[] { "數量", "料號", "機台名稱", "工令" },
+                new object[] { "數量", "料號", "客戶名稱", "工令" },
                 new object[] { 3d, 1001d, "配電盤", "W001" },
                 new object[] { "2", 1001d, "配電盤", "W001" }, // 同一項料加總
             }));
@@ -199,7 +199,7 @@ namespace Discharge.Tests
         {
             var path = MakeWorkbook((ExcelService.ItemSheet, new[]
             {
-                new object[] { "工令", "機台名稱", "料號", "數量" },
+                new object[] { "工令", "客戶名稱", "料號", "數量" },
                 new object[] { "W001", "配電盤", "A001", quantity },
             }));
 
@@ -213,7 +213,7 @@ namespace Discharge.Tests
             var path = MakeWorkbook(
                 (ExcelService.MachineSheet, new[]
                 {
-                    new object[] { "工令", "機台名稱" },
+                    new object[] { "工令", "客戶名稱" },
                     new object[] { "W001", "" },
                 }),
                 (ExcelService.ItemSheet, new[] { new object[] { "工令", "料號" } }));
@@ -221,7 +221,7 @@ namespace Discharge.Tests
             var errors = ExcelService.Read(path).Errors;
 
             Assert.Contains(errors, e => e.Contains("第 2 列"));
-            Assert.Contains(errors, e => e.Contains("機台名稱") && e.Contains("數量"));
+            Assert.Contains(errors, e => e.Contains("客戶名稱") && e.Contains("數量"));
         }
 
         [Fact]
@@ -356,11 +356,46 @@ namespace Discharge.Tests
         }
 
         [Fact]
+        public void Import_OldMachineNameHeader_IsReadAsCustomerName()
+        {
+            var path = MakeWorkbook(
+                (ExcelService.MachineSheet, new[] { new object[] { "工令", "機台名稱" }, new object[] { "W001", "大同" } }),
+                (ExcelService.ItemSheet, new[]
+                {
+                    new object[] { "工令", "機台名稱", "料號", "數量" },
+                    new object[] { "W001", "大同", "T-01", 2d },
+                }));
+
+            var file = ExcelService.Read(path);
+
+            Assert.Empty(file.Errors);
+            var machine = Assert.Single(file.Machines!);
+            Assert.Equal(("W001", "大同", 2m), (machine.WorkOrder, machine.Name, machine.Items.Single().Quantity));
+        }
+
+        [Fact]
+        public void Export_UsesCustomerNameHeader()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "Discharge.Tests." + Guid.NewGuid().ToString("N") + ".xlsx");
+            try
+            {
+                ExcelService.Export(new AppData { Machines = { new Machine { WorkOrder = "W001", Name = "大同" } } }, path);
+                using var wb = new ClosedXML.Excel.XLWorkbook(path);
+                Assert.Equal("客戶名稱", wb.Worksheet(ExcelService.MachineSheet).Cell(1, 2).GetString());
+                Assert.Equal("客戶名稱", wb.Worksheet(ExcelService.ItemSheet).Cell(1, 2).GetString());
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
         public void Import_WithoutTypeColumns_KeepsExistingTypes()
         {
             var path = MakeWorkbook(
                 (ExcelService.RuleSheet, new[] { new object[] { "功能", "料號", "數量" }, new object[] { "A", "X", 1d } }),
-                (ExcelService.MachineSheet, new[] { new object[] { "工令", "機台名稱" }, new object[] { "W001", "M" } }));
+                (ExcelService.MachineSheet, new[] { new object[] { "工令", "客戶名稱" }, new object[] { "W001", "M" } }));
             var rule = new FunctionRule { Name = "A", MachineTypes = { "舊機種" } };
             var machine = new Machine { WorkOrder = "W001", Name = "M", MachineType = "舊機種" };
             var target = new AppData { Rules = { rule }, Machines = { machine } };
@@ -411,10 +446,10 @@ namespace Discharge.Tests
         public void Read_OldExportWithoutFunctionColumns_StillWorks_AndKeepsFormFunctions()
         {
             var path = MakeWorkbook(
-                (ExcelService.MachineSheet, new[] { new object[] { "工令", "機台名稱" }, new object[] { "W001", "A" } }),
+                (ExcelService.MachineSheet, new[] { new object[] { "工令", "客戶名稱" }, new object[] { "W001", "A" } }),
                 (ExcelService.ItemSheet, new[]
                 {
-                    new object[] { "工令", "機台名稱", "料號", "數量" },
+                    new object[] { "工令", "客戶名稱", "料號", "數量" },
                     new object[] { "W001", "A", "X", 1d },
                 }));
             var target = new AppData { Machines = { new Machine { WorkOrder = "W001", Name = "A", Functions = { new MachineFunction { RuleId = "r1", Name = "舊功能" } } } } };
@@ -436,7 +471,7 @@ namespace Discharge.Tests
         {
             var path = MakeWorkbook((ExcelService.ItemSheet, new[]
             {
-                new object[] { "工令", "機台名稱", "料號", "數量", "來源功能" },
+                new object[] { "工令", "客戶名稱", "料號", "數量", "來源功能" },
                 new object[] { "W001", "A", "X", 1d, sources },
             }));
 

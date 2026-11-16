@@ -10,7 +10,7 @@ namespace Discharge.Tests
         public void Validate_RequiresWorkOrderNameAndPositiveQuantity()
         {
             Assert.Equal("請輸入工令。", MachineRules.Validate(new Machine { Name = "配電盤" }));
-            Assert.Equal("請輸入機台名稱。", MachineRules.Validate(new Machine { WorkOrder = "W001" }));
+            Assert.Equal("請輸入客戶名稱。", MachineRules.Validate(new Machine { WorkOrder = "W001" }));
 
             var m = new Machine { WorkOrder = "W001", Name = "配電盤", Items = { new MachineItem { PartNo = "A001", Quantity = 0 } } };
             Assert.Equal("料號 A001 的數量要大於 0。", MachineRules.Validate(m));

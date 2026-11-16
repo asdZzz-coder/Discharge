@@ -210,6 +210,9 @@ namespace Discharge
 
         private void LoadMachine(Machine? m)
         {
+            // 先清掉快照：下面填欄位會觸發 TextChanged，載入完成前不能判斷變更。
+            // 否則填工令時會把客戶名稱欄「上一張」的內容寫進這張的 _draft。
+            _savedSnapshot = "";
             _editing = m;
             _draft = m == null ? new Machine() : DataStore.Clone(m);
             _draftItems = new ObservableCollection<MachineItem>(_draft.Items);
@@ -218,7 +221,7 @@ namespace Discharge
             ItemGrid.ItemsSource = _draftItems;
             FormTitle.Text = m == null ? "新增機台" : $"{m.WorkOrder}　{m.Name}";
             FormSubtitle.Text = m == null
-                ? "填好工令和機台名稱，選工單上的功能帶出料，最後按「儲存」。"
+                ? "填好工令和客戶名稱，選工單上的功能帶出料，最後按「儲存」。"
                 : $"建立於 {m.CreatedAt:yyyy/MM/dd HH:mm}　·　最後儲存 {m.UpdatedAt:yyyy/MM/dd HH:mm}";
             DeleteMachineButton.Visibility = m != null ? Visibility.Visible : Visibility.Collapsed;
             RebuildMachineTypes();
@@ -419,7 +422,7 @@ namespace Discharge
                 return false;
             }
             var dup = MachineRules.FindDuplicate(m, _data.Machines);
-            if (dup != null && MessageBox.Show($"已經有工令 {dup.WorkOrder}、機台名稱 {dup.Name} 的表單，還是要儲存嗎？",
+            if (dup != null && MessageBox.Show($"已經有工令 {dup.WorkOrder}、客戶名稱 {dup.Name} 的表單，還是要儲存嗎？",
                     title, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return false;
 

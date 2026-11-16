@@ -34,7 +34,7 @@ namespace Discharge.Views
             if (file.Machines == null) notices.Add("這個檔案沒有機台資料，機台表單不會變動。");
             else if (!file.HasItems) notices.Add("這個檔案沒有出料明細，現有表單上的料不會變動。");
             if (file.Rules == null) notices.Add("這個檔案沒有功能規則，規則不會變動。");
-            if (file.MergedForms > 0) notices.Add($"有 {file.MergedForms} 張表單的工令和機台名稱重複，會併成一張，相同料號的數量相加。");
+            if (file.MergedForms > 0) notices.Add($"有 {file.MergedForms} 張表單的工令和客戶名稱重複，會併成一張，相同料號的數量相加。");
             if (notices.Count > 0)
             {
                 NoticeText.Text = string.Join("\n", notices);

@@ -129,8 +129,8 @@
                                 </Button>
                             </Grid>
                             <TextBox DockPanel.Dock="Top" x:Name="MachineSearchBox" Style="{StaticResource SearchBox}"
-                                     Tag="搜尋工令、機台、料號…" Margin="0,0,0,10" TextChanged="MachineSearch_TextChanged"
-                                     ToolTip="搜尋工令、機台名稱，或表單上的料號、名稱、規格；空格分開可以打好幾個關鍵字" />
+                                     Tag="搜尋工令、客戶、料號…" Margin="0,0,0,10" TextChanged="MachineSearch_TextChanged"
+                                     ToolTip="搜尋工令、客戶名稱，或表單上的料號、名稱、規格；空格分開可以打好幾個關鍵字" />
                             <Grid>
                                 <ListBox x:Name="MachineList" Style="{StaticResource SideList}" IsSynchronizedWithCurrentItem="False"
                                          SelectionChanged="MachineList_SelectionChanged">
@@ -186,7 +186,7 @@
                                 </Button>
                             </Grid>
 
-                            <!-- 工令、機種、機台名稱 -->
+                            <!-- 工令、機種、客戶名稱 -->
                             <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -225,7 +225,7 @@
                                     </Popup>
                                 </StackPanel>
                                 <StackPanel Grid.Column="4">
-                                    <TextBlock Text="機台名稱 *" Style="{StaticResource FieldLabel}" />
+                                    <TextBlock Text="客戶名稱 *" Style="{StaticResource FieldLabel}" />
                                     <TextBox x:Name="MachineNameBox" TextChanged="MachineField_TextChanged" />
                                 </StackPanel>
                             </Grid>

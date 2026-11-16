@@ -4,16 +4,16 @@ namespace Discharge.Services
 {
     public static class MachineRules
     {
-        /// <summary>檢查機台表單能不能存：工令、機台名稱必填，數量要大於 0。可以存就回傳 null。</summary>
+        /// <summary>檢查機台表單能不能存：工令、客戶名稱必填，數量要大於 0。可以存就回傳 null。</summary>
         public static string? Validate(Machine m)
         {
             if (m.WorkOrder.Length == 0) return "請輸入工令。";
-            if (m.Name.Length == 0) return "請輸入機台名稱。";
+            if (m.Name.Length == 0) return "請輸入客戶名稱。";
             var bad = m.Items.FirstOrDefault(i => i.Quantity <= 0);
             return bad == null ? null : $"料號 {bad.PartNo} 的數量要大於 0。";
         }
 
-        /// <summary>找出工令和機台名稱都一樣的另一張表單（不分大小寫）。</summary>
+        /// <summary>找出工令和客戶名稱都一樣的另一張表單（不分大小寫）。</summary>
         public static Machine? FindDuplicate(Machine m, IEnumerable<Machine> all) =>
             all.FirstOrDefault(x => x.Id != m.Id
                 && string.Equals(x.WorkOrder.Trim(), m.WorkOrder.Trim(), StringComparison.OrdinalIgnoreCase)
@@ -48,7 +48,7 @@ namespace Discharge.Services
             return (added, merged);
         }
 
-        /// <summary>搜尋工令、機台名稱、選的功能，以及表單上料件的料號、名稱、規格。</summary>
+        /// <summary>搜尋工令、客戶名稱、選的功能，以及表單上料件的料號、名稱、規格。</summary>
         public static bool Matches(Machine m, string? query) =>
             TextRules.Matches(query, new[] { m.WorkOrder, m.Name, m.MachineType }
                 .Concat(m.Functions.Select(f => f.Name))

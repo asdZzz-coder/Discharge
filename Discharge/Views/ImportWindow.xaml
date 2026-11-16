@@ -22,7 +22,7 @@
             <StackPanel>
                 <TextBlock Text="合併" FontWeight="SemiBold" />
                 <TextBlock Style="{StaticResource HintText}" Margin="0,3,0,0"
-                           Text="料號相同的物料用檔案的內容更新，工令和機台名稱相同的表單，料以檔案為準。檔案裡沒有的資料保留。" />
+                           Text="料號相同的物料用檔案的內容更新，工令和客戶名稱相同的表單，料以檔案為準。檔案裡沒有的資料保留。" />
             </StackPanel>
         </RadioButton>
         <RadioButton x:Name="ReplaceOption" Style="{StaticResource OptionCard}" GroupName="Mode">

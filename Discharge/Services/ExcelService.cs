@@ -35,7 +35,7 @@ namespace Discharge.Services
         /// <summary>「功能規則」工作表有「適用機種」欄。舊版匯出的檔案沒有，既有規則的機種不動。</summary>
         public bool HasRuleTypes { get; set; }
 
-        /// <summary>檔案裡工令和機台名稱重複、被併成一張的表單數。</summary>
+        /// <summary>檔案裡工令和客戶名稱重複、被併成一張的表單數。</summary>
         public int MergedForms { get; set; }
 
         /// <summary>讀不懂的列。有任何一筆就不匯入，免得只進來一半。</summary>
@@ -50,7 +50,7 @@ namespace Discharge.Services
 
     /// <summary>
     /// Excel 匯出 / 匯入。五張工作表：「物料資料庫」一列一項物料、「機台」一列一張表單、
-    /// 「出料明細」一列一項料，用工令和機台名稱對應回表單、「功能規則」一列一條規則上的一項料、「機種」一列一個機種。
+    /// 「出料明細」一列一項料，用工令和客戶名稱對應回表單、「功能規則」一列一條規則上的一項料、「機種」一列一個機種。
     /// 匯入時依第一列的標題找欄位，順序可以調換。
     /// </summary>
     public static class ExcelService
@@ -66,7 +66,10 @@ namespace Discharge.Services
         private const string HSpec = "規格";
         private const string HNote = "備註";
         private const string HWorkOrder = "工令";
-        private const string HMachineName = "機台名稱";
+        private const string HMachineName = "客戶名稱";
+
+        /// <summary>舊版標題 → 現在的標題。舊版匯出的檔案用這些標題也讀得懂。</summary>
+        private static readonly (string Old, string Current)[] HeaderAliases = { ("機台名稱", HMachineName) };
         private const string HQuantity = "數量";
         private const string HCreated = "建立時間";
         private const string HUpdated = "最後儲存";
@@ -321,7 +324,7 @@ namespace Discharge.Services
                     if (workOrder.Length == 0 && name.Length == 0) continue;
                     if (workOrder.Length == 0 || name.Length == 0)
                     {
-                        result.Errors.Add($"「{machineSheet.Name}」第 {row.RowNumber()} 列：工令和機台名稱都要填。");
+                        result.Errors.Add($"「{machineSheet.Name}」第 {row.RowNumber()} 列：工令和客戶名稱都要填。");
                         continue;
                     }
                     if (forms.ContainsKey(FormKey(workOrder, name)))
@@ -362,7 +365,7 @@ namespace Discharge.Services
             var where = $"「{sheet}」第 {row.RowNumber()} 列";
             if (workOrder.Length == 0 || name.Length == 0)
             {
-                result.Errors.Add($"{where}：工令和機台名稱都要填。");
+                result.Errors.Add($"{where}：工令和客戶名稱都要填。");
                 return;
             }
             if (partNo.Length == 0)
@@ -419,6 +422,9 @@ namespace Discharge.Services
             if (header == null) return columns;
             foreach (var cell in header.CellsUsed())
                 columns.TryAdd(CellText(cell), cell.Address.ColumnNumber);
+            foreach (var (old, current) in HeaderAliases)
+                if (!columns.ContainsKey(current) && columns.TryGetValue(old, out var column))
+                    columns[current] = column;
             return columns;
         }
 
@@ -477,7 +483,7 @@ namespace Discharge.Services
 
         /// <summary>
         /// 把讀到的內容套用到 target。檔案沒有的工作表，對應的資料不動（「完全以 Excel 為準」也一樣）。
-        /// 工令和機台名稱相同就算同一張表單：保留原本的編號和建立時間，料以檔案為準。
+        /// 工令和客戶名稱相同就算同一張表單：保留原本的編號和建立時間，料以檔案為準。
         /// </summary>
         public static ImportResult Apply(AppData target, ExcelImport file, ImportMode mode)
         {
